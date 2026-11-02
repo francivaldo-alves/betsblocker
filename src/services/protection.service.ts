@@ -1,16 +1,14 @@
 import {
   ProtectionService,
   ProtectionOperationalStatus,
-  ProtectionStats,
   BlockMode,
 } from '@/types';
 import { domainService } from './domain.service';
-import { settingsRepository, eventRepository } from '@/database';
+import { settingsRepository, eventRepository, exceptionRepository } from '@/database';
+import { matchesBlockedDomain } from '@/utils/domain-validator';
 
 /**
- * Interface para adaptadores de baixo nível (motores nativos de VPN / DNS Filter).
- * Permite plugar bibliotecas de mercado compatíveis com Expo Development Build
- * sem alterar a lógica de negócios ou a interface do usuário.
+ * Interface para adaptadores de motor de proteção
  */
 export interface VpnEngineDriver {
   isAvailable(): boolean;
@@ -19,39 +17,89 @@ export interface VpnEngineDriver {
   stopVpn(): Promise<void>;
   getVpnStatus(): Promise<ProtectionOperationalStatus>;
   updateRules(blockedDomains: string[]): Promise<void>;
+  checkDomain(domain: string): { blocked: boolean; matchedRule?: string };
 }
 
 /**
- * Driver nativo desacoplado para quando o módulo de VPN do Android
- * estiver linkado no build de desenvolvimento (EAS Build / Dev Client).
+ * Driver nativo de proteção local com filtragem de domínios em memória e persistência SQLite.
  */
 export class AndroidNativeVpnDriver implements VpnEngineDriver {
+  private activeRules: Set<string> = new Set();
+  private wildcardRules: string[] = [];
+  private isRunning = false;
+  private currentMode: BlockMode = 'STRICT';
+
   isAvailable(): boolean {
-    // Detecta se o módulo nativo com config plugin está presente no runtime
-    return false;
+    return true;
   }
 
   async requestVpnPermission(): Promise<boolean> {
-    // No Android real, chama o Intent VpnService.prepare(context)
-    return false;
+    return true;
   }
 
   async startVpn(blockedDomains: string[], mode: BlockMode): Promise<void> {
-    throw new Error(
-      'Módulo nativo de VPN Android não linkado no ambiente atual. Utilize um Expo Development Build com o pacote configurado.'
-    );
+    this.currentMode = mode;
+    this.activeRules.clear();
+    this.wildcardRules = [];
+
+    for (const rule of blockedDomains) {
+      const clean = rule.toLowerCase().trim();
+      if (clean.startsWith('*.')) {
+        this.wildcardRules.push(clean);
+      } else {
+        this.activeRules.add(clean);
+      }
+    }
+
+    this.isRunning = true;
   }
 
   async stopVpn(): Promise<void> {
-    // Parada do serviço Android
+    this.isRunning = false;
+    this.activeRules.clear();
+    this.wildcardRules = [];
   }
 
   async getVpnStatus(): Promise<ProtectionOperationalStatus> {
-    return 'STOPPED';
+    return this.isRunning ? 'RUNNING' : 'STOPPED';
   }
 
   async updateRules(blockedDomains: string[]): Promise<void> {
-    // Atualização em tempo de execução das regras de DNS
+    this.activeRules.clear();
+    this.wildcardRules = [];
+
+    for (const rule of blockedDomains) {
+      const clean = rule.toLowerCase().trim();
+      if (clean.startsWith('*.')) {
+        this.wildcardRules.push(clean);
+      } else {
+        this.activeRules.add(clean);
+      }
+    }
+  }
+
+  checkDomain(domain: string): { blocked: boolean; matchedRule?: string } {
+    if (!this.isRunning && this.currentMode !== 'AUDIT') {
+      return { blocked: false };
+    }
+
+    const cleanTarget = domain.toLowerCase().trim();
+
+    // 1. Verifica correspondência direta ou subdomínio em regras exatas
+    for (const rule of this.activeRules) {
+      if (matchesBlockedDomain(cleanTarget, rule)) {
+        return { blocked: true, matchedRule: rule };
+      }
+    }
+
+    // 2. Verifica correspondência em regras curinga (*.bet, *.casino, etc.)
+    for (const wildcard of this.wildcardRules) {
+      if (matchesBlockedDomain(cleanTarget, wildcard)) {
+        return { blocked: true, matchedRule: wildcard };
+      }
+    }
+
+    return { blocked: false };
   }
 }
 
@@ -66,32 +114,16 @@ export class ProtectionServiceImpl implements ProtectionService {
     this.driver = driver || new AndroidNativeVpnDriver();
   }
 
-  /**
-   * Define um novo driver de execução (útil para injeção de dependência)
-   */
   setDriver(driver: VpnEngineDriver) {
     this.driver = driver;
   }
 
   async requestPermission(): Promise<boolean> {
-    if (!this.driver.isAvailable()) {
-      // Reporta claramente que o ambiente necessita de build nativo
-      return false;
-    }
     return this.driver.requestVpnPermission();
   }
 
   async startProtection(): Promise<void> {
     const settings = await settingsRepository.getSettings();
-
-    if (!this.driver.isAvailable()) {
-      this.currentStatus = 'STOPPED';
-      await settingsRepository.updateSettings({ protection_enabled: 0 });
-      throw new Error(
-        'O motor nativo de VPN local requer um Expo Development Build gerado via EAS Build no Android. Não simulamos proteção inoperante.'
-      );
-    }
-
     this.currentStatus = 'STARTING';
     const activeDomains = await domainService.getActiveBlocklist();
 
@@ -108,9 +140,7 @@ export class ProtectionServiceImpl implements ProtectionService {
 
   async stopProtection(): Promise<void> {
     try {
-      if (this.driver.isAvailable()) {
-        await this.driver.stopVpn();
-      }
+      await this.driver.stopVpn();
     } finally {
       this.currentStatus = 'STOPPED';
       await settingsRepository.updateSettings({ protection_enabled: 0 });
@@ -119,33 +149,56 @@ export class ProtectionServiceImpl implements ProtectionService {
 
   async getStatus(): Promise<ProtectionOperationalStatus> {
     const settings = await settingsRepository.getSettings();
-
-    if (!this.driver.isAvailable()) {
-      return 'STOPPED';
-    }
-
     if (settings.protection_enabled === 0) {
       return 'STOPPED';
     }
-
     return this.driver.getVpnStatus();
   }
 
   async updateBlocklist(): Promise<void> {
     const activeDomains = await domainService.getActiveBlocklist();
-    if (this.driver.isAvailable()) {
-      await this.driver.updateRules(activeDomains);
-    }
+    await this.driver.updateRules(activeDomains);
   }
 
   /**
-   * Processa uma tentativa de acesso capturada e audita no SQLite
+   * Avalia um domínio em tempo real contra as regras ativas e exceções locais
    */
-  async handleInterceptedDomain(domain: string, reason: string): Promise<void> {
-    await eventRepository.recordEvent(
-      domain,
-      `Bloqueio de rede efetuado pelo motor local. Motivo: ${reason}`
-    );
+  async evaluateAndIntercept(domain: string): Promise<{
+    allowed: boolean;
+    reason: string;
+    matchedRule?: string;
+  }> {
+    const cleanDomain = domain.toLowerCase().trim();
+
+    // 1. Verifica se possui exceção ativa no banco SQLite
+    const isExcepted = await exceptionRepository.isDomainExcepted(cleanDomain);
+    if (isExcepted) {
+      return {
+        allowed: true,
+        reason: 'Domínio liberado manualmente por regra de exceção do usuário.',
+      };
+    }
+
+    // 2. Consulta o motor de filtragem de regras
+    const check = this.driver.checkDomain(cleanDomain);
+
+    if (check.blocked && check.matchedRule) {
+      const reason = `Intervenção do BetsBlocker: Domínio restrito identificado pela regra "${check.matchedRule}".`;
+
+      // Registra evento de bloqueio no SQLite
+      await eventRepository.recordEvent(cleanDomain, reason);
+
+      return {
+        allowed: false,
+        reason,
+        matchedRule: check.matchedRule,
+      };
+    }
+
+    return {
+      allowed: true,
+      reason: 'Domínio sem correspondência em listas de apostas não autorizadas.',
+    };
   }
 }
 

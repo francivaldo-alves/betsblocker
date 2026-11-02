@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  TextInput,
 } from 'react-native';
 import {
   ShieldCheck,
@@ -16,6 +17,7 @@ import {
   Power,
   AlertCircle,
   FileText,
+  Search,
 } from 'lucide-react-native';
 import { palette } from '@/theme/colors';
 import { Card } from '@/components/Card';
@@ -24,6 +26,7 @@ import { useDomainsStore } from '@/features/domains/domains.store';
 import { useProtectionStore } from '@/features/protection/protection.store';
 import { useSyncStore } from '@/features/synchronization/sync.store';
 import { useHistoryStore } from '@/features/history/history.store';
+import { protectionService } from '@/services/protection.service';
 
 export default function DashboardScreen() {
   const { totalBlocked, totalPending, loadBlockedDomains, loadPendingDomains } =
@@ -34,6 +37,9 @@ export default function DashboardScreen() {
     useSyncStore();
   const { todayBlockedCount, loadBlockEvents } = useHistoryStore();
 
+  const [testDomain, setTestDomain] = useState('');
+  const [isTesting, setIsTesting] = useState(false);
+
   useEffect(() => {
     loadSettings();
     loadLastSync();
@@ -41,6 +47,31 @@ export default function DashboardScreen() {
     loadPendingDomains();
     loadBlockEvents();
   }, []);
+
+  const handleTestDomain = async () => {
+    if (!testDomain.trim()) {
+      Alert.alert('Insira um Domínio', 'Digite um domínio para testar (ex: blaze.com ou tigrinho.bet).');
+      return;
+    }
+    if (!isProtectionRunning) {
+      Alert.alert('Proteção Desativada', 'Ative a proteção no botão acima antes de realizar o teste.');
+      return;
+    }
+
+    setIsTesting(true);
+    const result = await protectionService.evaluateAndIntercept(testDomain.trim());
+    setIsTesting(false);
+    await loadBlockEvents();
+
+    if (!result.allowed) {
+      Alert.alert(
+        '🚫 ACESSO BLOQUEADO PELO BETSBLOCKER',
+        `${result.reason}\n\nO evento foi registrado na auditoria local SQLite.`
+      );
+    } else {
+      Alert.alert('✅ ACESSO PERMITIDO', result.reason);
+    }
+  };
 
   const handleSync = async () => {
     const res = await syncInitialList();
@@ -136,6 +167,39 @@ export default function DashboardScreen() {
         <Text style={styles.helperText}>
           Eventos locais registrados no dispositivo sem envio de telemetria externa.
         </Text>
+      </Card>
+
+      {/* Testador de Bloqueio em Tempo Real */}
+      <Card>
+        <View style={styles.cardHeader}>
+          <Search size={20} color={palette.navy} />
+          <Text style={styles.cardTitle}>Testar Bloqueio em Tempo Real</Text>
+        </View>
+        <Text style={styles.helperText}>
+          Experimente testar qualquer domínio restrito (ex: blaze.com, api.pgsoft.com, qualquer.bet) para verificar o motor de proteção:
+        </Text>
+        <View style={styles.testInputRow}>
+          <TextInput
+            style={styles.testInput}
+            placeholder="Digite o domínio (ex: blaze.com)"
+            placeholderTextColor={palette.gray}
+            value={testDomain}
+            onChangeText={setTestDomain}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <TouchableOpacity
+            style={[styles.testButton, isTesting && styles.buttonDisabled]}
+            onPress={handleTestDomain}
+            disabled={isTesting}
+          >
+            {isTesting ? (
+              <ActivityIndicator size="small" color={palette.white} />
+            ) : (
+              <Text style={styles.testButtonText}>Testar</Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </Card>
 
       {/* Card de Sincronização e Versão */}
@@ -334,5 +398,33 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: palette.gray,
     lineHeight: 18,
+  },
+  testInputRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+  testInput: {
+    flex: 1,
+    height: 42,
+    backgroundColor: palette.backgroundLight,
+    borderWidth: 1,
+    borderColor: palette.borderLight,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    color: palette.navy,
+  },
+  testButton: {
+    backgroundColor: palette.navy,
+    paddingHorizontal: 18,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  testButtonText: {
+    color: palette.white,
+    fontWeight: '700',
+    fontSize: 13,
   },
 });
