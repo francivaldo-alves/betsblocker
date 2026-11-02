@@ -108,7 +108,7 @@ class BetsBlockerVpnService : VpnService() {
 
       isRunning = true
       isThreadRunning.set(true)
-      threadPool = Executors.newFixedThreadPool(4)
+      threadPool = Executors.newFixedThreadPool(16)
 
       workerThread = Thread({
         runVpnLoop()

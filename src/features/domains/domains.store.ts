@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { domainService } from '@/services/domain.service';
 import { classifierService } from '@/services/classifier.service';
+import { protectionService } from '@/services/protection.service';
 import { BlockedDomain, ReviewStatus } from '@/types';
 
 interface DomainsState {
@@ -78,6 +79,8 @@ export const useDomainsStore = create<DomainsState>((set, get) => ({
     try {
       await domainService.addUserDomain(domain, evidence, category);
       await Promise.all([get().loadBlockedDomains(), get().loadPendingDomains()]);
+      // Atualiza imediatamente o serviço de VPN nativo
+      await protectionService.updateBlocklist();
       return true;
     } catch (err: any) {
       set({ error: err?.message || 'Erro ao adicionar domínio manual.' });
@@ -89,6 +92,8 @@ export const useDomainsStore = create<DomainsState>((set, get) => ({
     try {
       await domainService.addException(domain, reason, expiresAt);
       await get().loadBlockedDomains();
+      // Atualiza imediatamente o serviço de VPN nativo
+      await protectionService.updateBlocklist();
       return true;
     } catch (err: any) {
       set({ error: err?.message || 'Erro ao registrar exceção.' });
@@ -100,6 +105,8 @@ export const useDomainsStore = create<DomainsState>((set, get) => ({
     try {
       await domainService.removeException(domain);
       await get().loadBlockedDomains();
+      // Atualiza imediatamente o serviço de VPN nativo
+      await protectionService.updateBlocklist();
       return true;
     } catch (err: any) {
       set({ error: err?.message || 'Erro ao remover exceção.' });
@@ -111,6 +118,8 @@ export const useDomainsStore = create<DomainsState>((set, get) => ({
     try {
       await classifierService.reviewDomain(id, status, note);
       await Promise.all([get().loadBlockedDomains(), get().loadPendingDomains()]);
+      // Atualiza imediatamente o serviço de VPN nativo
+      await protectionService.updateBlocklist();
       return true;
     } catch (err: any) {
       set({ error: err?.message || 'Erro ao revisar domínio.' });

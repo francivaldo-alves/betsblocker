@@ -1,16 +1,29 @@
 package com.betsblocker.vpn
 
 import android.net.VpnService
+import android.util.Log
 import java.io.OutputStream
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
+import java.net.InetSocketAddress
 
 class DnsPacketHandler {
 
+  companion object {
+    private const val TAG = "BetsBlockerDNS"
+
+    // Servidores DNS upstream de alta confiabilidade com fallback automático
+    private val UPSTREAM_SERVERS = listOf(
+      InetAddress.getByAddress(byteArrayOf(8, 8, 8, 8)),      // Google DNS Primário
+      InetAddress.getByAddress(byteArrayOf(1, 1, 1, 1)),      // Cloudflare DNS Primário
+      InetAddress.getByAddress(byteArrayOf(8, 8, 4, 4)),      // Google Secundário
+      InetAddress.getByAddress(byteArrayOf(1, 0, 0, 1))       // Cloudflare Secundário
+    )
+  }
+
   private var blockedRules: Set<String> = emptySet()
   private var wildcardRules: List<String> = emptyList()
-  private val upstreamDns = "1.1.1.1"
 
   fun updateRules(blocked: Set<String>, wildcards: List<String>) {
     this.blockedRules = blocked
@@ -48,22 +61,26 @@ class DnsPacketHandler {
     if (length < ihl + 8) return
 
     val protocol = packet[9].toInt() and 0xFF
-    if (protocol != 17) return // Protocol 17 = UDP
+    if (protocol != 17) return // Protocolo 17 = UDP
 
     val srcPort = ((packet[ihl].toInt() and 0xFF) shl 8) or (packet[ihl + 1].toInt() and 0xFF)
     val dstPort = ((packet[ihl + 2].toInt() and 0xFF) shl 8) or (packet[ihl + 3].toInt() and 0xFF)
 
-    // Apenas intercepta consultas DNS (porta 53)
+    // Apenas intercepta consultas DNS direcionadas à porta 53
     if (dstPort != 53) return
 
+    val udpLen = ((packet[ihl + 4].toInt() and 0xFF) shl 8) or (packet[ihl + 5].toInt() and 0xFF)
+    val dnsPayloadLen = udpLen - 8
     val dnsOffset = ihl + 8
-    val dnsLen = length - dnsOffset
-    if (dnsLen < 12) return
 
-    // Extrai o QNAME da pergunta DNS
+    if (dnsPayloadLen < 12 || dnsOffset + dnsPayloadLen > length) return
+
+    // Extrai o nome do domínio (QNAME) da pergunta DNS
     val domainSb = StringBuilder()
     var p = dnsOffset + 12
-    while (p < length) {
+    val maxPos = dnsOffset + dnsPayloadLen
+
+    while (p < maxPos) {
       val labelLen = packet[p].toInt() and 0xFF
       if (labelLen == 0) {
         p++
@@ -74,19 +91,19 @@ class DnsPacketHandler {
         break
       }
       p++
-      if (p + labelLen > length) break
+      if (p + labelLen > maxPos) break
       if (domainSb.isNotEmpty()) domainSb.append('.')
       domainSb.append(String(packet, p, labelLen, Charsets.US_ASCII))
       p += labelLen
     }
 
     val questionEnd = p + 4
-    if (questionEnd > length) return
-    val questionLen = questionEnd - (dnsOffset + 12)
+    val questionLen = if (questionEnd <= maxPos) questionEnd - (dnsOffset + 12) else dnsPayloadLen - 12
     val requestedDomain = domainSb.toString().lowercase().trim()
 
     if (isDomainBlocked(requestedDomain)) {
-      // Bloqueia com NXDOMAIN instantâneo
+      Log.i(TAG, "🚫 [BLOQUEIO ATIVO] $requestedDomain")
+      // Responde imediatamente com NXDOMAIN (Código 3 - Domínio Inexistente)
       val dnsResp = ByteArray(12 + questionLen)
       dnsResp[0] = packet[dnsOffset]
       dnsResp[1] = packet[dnsOffset + 1]
@@ -104,26 +121,57 @@ class DnsPacketHandler {
 
       writeUdpResponse(packet, srcPort, dstPort, dnsResp, outputStream)
     } else {
-      // Encaminha requisição ao DNS oficial upstream (Cloudflare 1.1.1.1)
-      try {
-        val socket = DatagramSocket()
-        vpnService.protect(socket) // Garante que a requisição sai pela conexão real
-        socket.soTimeout = 2000
+      // Domínio permitido (ex: google.com, whatsapp.com): repassa ao DNS upstream com fallback resiliente
+      val dnsQueryPayload = packet.copyOfRange(dnsOffset, dnsOffset + dnsPayloadLen)
+      var replyBytes: ByteArray? = null
 
-        val dnsPayload = packet.copyOfRange(dnsOffset, dnsOffset + dnsLen)
-        val upstreamAddr = InetAddress.getByName(upstreamDns)
-        val outPacket = DatagramPacket(dnsPayload, dnsPayload.size, upstreamAddr, 53)
-        socket.send(outPacket)
+      var socket: DatagramSocket? = null
+      try {
+        socket = DatagramSocket(null)
+        val protected = vpnService.protect(socket)
+        if (!protected) {
+          Log.w(TAG, "Aviso: vpnService.protect() retornou false")
+        }
+        socket.soTimeout = 1200
+        socket.bind(InetSocketAddress(0))
 
         val inBuf = ByteArray(2048)
         val inPacket = DatagramPacket(inBuf, inBuf.size)
-        socket.receive(inPacket)
-        socket.close()
 
-        val replyDns = inBuf.copyOf(inPacket.length)
-        writeUdpResponse(packet, srcPort, dstPort, replyDns, outputStream)
-      } catch (_: Exception) {
-        // Ignora timeout de pacote individual
+        for (upstream in UPSTREAM_SERVERS) {
+          try {
+            val outPacket = DatagramPacket(dnsQueryPayload, dnsQueryPayload.size, upstream, 53)
+            socket.send(outPacket)
+            socket.receive(inPacket)
+            if (inPacket.length >= 12) {
+              replyBytes = inBuf.copyOf(inPacket.length)
+              break // Sucesso! Recebeu resposta válida
+            }
+          } catch (_: Exception) {
+            // Tenta o próximo upstream da lista
+          }
+        }
+      } catch (e: Exception) {
+        Log.e(TAG, "Erro no socket UDP para $requestedDomain: ${e.message}")
+      } finally {
+        try {
+          socket?.close()
+        } catch (_: Exception) {}
+      }
+
+      if (replyBytes != null) {
+        writeUdpResponse(packet, srcPort, dstPort, replyBytes, outputStream)
+      } else {
+        // Fallback: se nenhum upstream respondeu a tempo, envia SERVFAIL para liberar o cliente sem travar
+        val failResp = ByteArray(12 + questionLen)
+        failResp[0] = packet[dnsOffset]
+        failResp[1] = packet[dnsOffset + 1]
+        failResp[2] = 0x81.toByte()
+        failResp[3] = 0x82.toByte() // RCODE=2 (SERVFAIL)
+        failResp[4] = 0.toByte()
+        failResp[5] = 1.toByte()
+        System.arraycopy(packet, dnsOffset + 12, failResp, 12, questionLen)
+        writeUdpResponse(packet, srcPort, dstPort, failResp, outputStream)
       }
     }
   }
@@ -138,39 +186,48 @@ class DnsPacketHandler {
     val totalIpLen = 20 + 8 + dnsPayload.size
     val resp = ByteArray(totalIpLen)
 
-    // Cabeçalho IPv4
-    resp[0] = 0x45.toByte()
+    // Cabeçalho IPv4 (20 bytes)
+    resp[0] = 0x45.toByte() // Versão 4, IHL 5 (20 bytes)
     resp[1] = 0.toByte()
     resp[2] = (totalIpLen shr 8).toByte()
     resp[3] = (totalIpLen and 0xFF).toByte()
     resp[4] = 0.toByte()
     resp[5] = 0.toByte()
-    resp[6] = 0x40.toByte()
+    resp[6] = 0x40.toByte() // Don't fragment
     resp[7] = 0.toByte()
-    resp[8] = 64.toByte()
-    resp[9] = 17.toByte() // UDP
+    resp[8] = 64.toByte() // TTL padrão
+    resp[9] = 17.toByte() // Protocolo 17 = UDP
 
-    // Inverte IPs (Origem vira Destino)
-    System.arraycopy(origPacket, 16, resp, 12, 4)
-    System.arraycopy(origPacket, 12, resp, 16, 4)
+    // Inverte IPs (Origem vira Destino e vice-versa)
+    val srcIp = ByteArray(4)
+    val dstIp = ByteArray(4)
+    System.arraycopy(origPacket, 16, srcIp, 0, 4) // Antigo destino vira origem (10.111.222.1)
+    System.arraycopy(origPacket, 12, dstIp, 0, 4) // Antiga origem vira destino (cliente)
 
-    val checksum = computeChecksum(resp, 0, 20)
-    resp[10] = (checksum.toInt() shr 8).toByte()
-    resp[11] = (checksum.toInt() and 0xFF).toByte()
+    System.arraycopy(srcIp, 0, resp, 12, 4)
+    System.arraycopy(dstIp, 0, resp, 16, 4)
 
-    // Cabeçalho UDP
-    resp[20] = (serverPort shr 8).toByte()
+    // Checksum do cabeçalho IPv4
+    val ipChecksum = computeIpChecksum(resp, 0, 20)
+    resp[10] = (ipChecksum.toInt() shr 8).toByte()
+    resp[11] = (ipChecksum.toInt() and 0xFF).toByte()
+
+    // Cabeçalho UDP (8 bytes)
+    resp[20] = (serverPort shr 8).toByte() // Porta de origem: 53
     resp[21] = (serverPort and 0xFF).toByte()
-    resp[22] = (clientPort shr 8).toByte()
+    resp[22] = (clientPort shr 8).toByte() // Porta de destino: porta efêmera do cliente
     resp[23] = (clientPort and 0xFF).toByte()
     val udpLen = 8 + dnsPayload.size
     resp[24] = (udpLen shr 8).toByte()
     resp[25] = (udpLen and 0xFF).toByte()
-    resp[26] = 0.toByte()
-    resp[27] = 0.toByte()
 
     // Payload DNS
     System.arraycopy(dnsPayload, 0, resp, 28, dnsPayload.size)
+
+    // Checksum UDP completo com pseudo-cabeçalho
+    val udpChecksum = computeUdpChecksum(srcIp, dstIp, resp, 20, udpLen)
+    resp[26] = (udpChecksum.toInt() shr 8).toByte()
+    resp[27] = (udpChecksum.toInt() and 0xFF).toByte()
 
     synchronized(outputStream) {
       try {
@@ -180,7 +237,7 @@ class DnsPacketHandler {
     }
   }
 
-  private fun computeChecksum(buf: ByteArray, offset: Int, length: Int): Short {
+  private fun computeIpChecksum(buf: ByteArray, offset: Int, length: Int): Short {
     var sum = 0
     var i = offset
     while (i < offset + length - 1) {
@@ -196,5 +253,43 @@ class DnsPacketHandler {
       sum = (sum and 0xFFFF) + (sum shr 16)
     }
     return (sum.inv() and 0xFFFF).toShort()
+  }
+
+  private fun computeUdpChecksum(
+    srcIp: ByteArray,
+    dstIp: ByteArray,
+    packet: ByteArray,
+    udpOffset: Int,
+    udpLen: Int
+  ): Short {
+    var sum = 0
+    // Pseudo-cabeçalho IPv4
+    sum += (((srcIp[0].toInt() and 0xFF) shl 8) or (srcIp[1].toInt() and 0xFF))
+    sum += (((srcIp[2].toInt() and 0xFF) shl 8) or (srcIp[3].toInt() and 0xFF))
+    sum += (((dstIp[0].toInt() and 0xFF) shl 8) or (dstIp[1].toInt() and 0xFF))
+    sum += (((dstIp[2].toInt() and 0xFF) shl 8) or (dstIp[3].toInt() and 0xFF))
+    sum += 17 // Protocolo UDP
+    sum += udpLen
+
+    // Cabeçalho UDP + Payload
+    var i = udpOffset
+    val end = udpOffset + udpLen
+    while (i < end - 1) {
+      if (i == udpOffset + 6) {
+        i += 2 // Pula campo de checksum
+        continue
+      }
+      val word = ((packet[i].toInt() and 0xFF) shl 8) or (packet[i + 1].toInt() and 0xFF)
+      sum += word
+      i += 2
+    }
+    if (i < end) {
+      sum += ((packet[i].toInt() and 0xFF) shl 8)
+    }
+    while ((sum shr 16) > 0) {
+      sum = (sum and 0xFFFF) + (sum shr 16)
+    }
+    val res = (sum.inv() and 0xFFFF)
+    return if (res == 0) 0xFFFF.toShort() else res.toShort()
   }
 }
