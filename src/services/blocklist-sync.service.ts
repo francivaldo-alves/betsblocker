@@ -66,11 +66,14 @@ export class BlocklistSyncService {
     }
     const manifest = manifestParsed.data as BlocklistManifest;
 
-    // 2. Valida hash SHA-256 do conteúdo da lista
-    const computedHash = await this.calculateSha256(rawListJsonString);
-    if (computedHash.toLowerCase() !== manifest.checksum.toLowerCase()) {
+    // 2. Valida hash SHA-256 do conteúdo da lista (canônico e trimmed para tolerância entre plataformas)
+    const computedHash = await this.calculateSha256(rawListJsonString.trim());
+    const rawHash = await this.calculateSha256(rawListJsonString);
+    const expected = manifest.checksum.toLowerCase().trim();
+
+    if (computedHash.toLowerCase() !== expected && rawHash.toLowerCase() !== expected) {
       throw new Error(
-        `Falha de integridade SHA-256. Esperado: ${manifest.checksum.toLowerCase()}, Calculado: ${computedHash.toLowerCase()}`
+        `Falha de integridade SHA-256. Esperado: ${expected}, Calculado: ${computedHash.toLowerCase()}`
       );
     }
 
