@@ -1,0 +1,27 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.betsblocker.vpn'
+version = '1.0.0'
+
+expoModule {
+  v2 true
+}
+
+android {
+  namespace "com.betsblocker.vpn"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+  lintOptions {
+    abortOnError false
+  }
+}
+
+dependencies {
+  implementation 'androidx.core:core-ktx:1.13.1'
+  implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.0'
+}

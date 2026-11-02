@@ -1,0 +1,7 @@
+{
+  "name": "expo-vpn-blocker",
+  "version": "1.0.0",
+  "description": "BetsBlocker Android Local VPN DNS Sinkhole",
+  "main": "src/index.ts",
+  "types": "src/index.ts"
+}

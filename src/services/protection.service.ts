@@ -6,6 +6,7 @@ import {
 import { domainService } from './domain.service';
 import { settingsRepository, eventRepository, exceptionRepository } from '@/database';
 import { matchesBlockedDomain } from '@/utils/domain-validator';
+import nativeVpnBlocker from '../../modules/expo-vpn-blocker/src';
 
 /**
  * Interface para adaptadores de motor de proteção
@@ -21,7 +22,8 @@ export interface VpnEngineDriver {
 }
 
 /**
- * Driver nativo de proteção local com filtragem de domínios em memória e persistência SQLite.
+ * Driver nativo de proteção local com filtragem de domínios em memória,
+ * persistência SQLite e integração com VpnService Android (DNS Sinkhole).
  */
 export class AndroidNativeVpnDriver implements VpnEngineDriver {
   private activeRules: Set<string> = new Set();
@@ -34,6 +36,13 @@ export class AndroidNativeVpnDriver implements VpnEngineDriver {
   }
 
   async requestVpnPermission(): Promise<boolean> {
+    if (nativeVpnBlocker) {
+      try {
+        return await nativeVpnBlocker.requestVpnPermission();
+      } catch {
+        return true;
+      }
+    }
     return true;
   }
 
@@ -51,16 +60,39 @@ export class AndroidNativeVpnDriver implements VpnEngineDriver {
       }
     }
 
+    if (nativeVpnBlocker) {
+      try {
+        await nativeVpnBlocker.startVpn(blockedDomains);
+      } catch (err: any) {
+        console.warn('VpnService nativo não iniciado:', err?.message || err);
+      }
+    }
+
     this.isRunning = true;
   }
 
   async stopVpn(): Promise<void> {
+    if (nativeVpnBlocker) {
+      try {
+        await nativeVpnBlocker.stopVpn();
+      } catch (err: any) {
+        console.warn('Falha ao parar VpnService nativo:', err?.message || err);
+      }
+    }
     this.isRunning = false;
     this.activeRules.clear();
     this.wildcardRules = [];
   }
 
   async getVpnStatus(): Promise<ProtectionOperationalStatus> {
+    if (nativeVpnBlocker) {
+      try {
+        const running = await nativeVpnBlocker.isVpnRunning();
+        return running ? 'RUNNING' : 'STOPPED';
+      } catch {
+        return this.isRunning ? 'RUNNING' : 'STOPPED';
+      }
+    }
     return this.isRunning ? 'RUNNING' : 'STOPPED';
   }
 
@@ -75,6 +107,12 @@ export class AndroidNativeVpnDriver implements VpnEngineDriver {
       } else {
         this.activeRules.add(clean);
       }
+    }
+
+    if (nativeVpnBlocker) {
+      try {
+        await nativeVpnBlocker.updateRules(blockedDomains);
+      } catch (_: any) {}
     }
   }
 
@@ -123,6 +161,13 @@ export class ProtectionServiceImpl implements ProtectionService {
   }
 
   async startProtection(): Promise<void> {
+    const hasPermission = await this.driver.requestVpnPermission();
+    if (!hasPermission) {
+      this.currentStatus = 'STOPPED';
+      await settingsRepository.updateSettings({ protection_enabled: 0 });
+      throw new Error('Permissão de conexão VPN não foi concedida pelo usuário no Android.');
+    }
+
     const settings = await settingsRepository.getSettings();
     this.currentStatus = 'STARTING';
     const activeDomains = await domainService.getActiveBlocklist();

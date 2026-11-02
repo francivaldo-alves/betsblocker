@@ -1,0 +1,9 @@
+{
+  "name": "expo-vpn-blocker",
+  "platforms": ["android"],
+  "android": {
+    "modules": [
+      "com.betsblocker.vpn.ExpoVpnBlockerModule"
+    ]
+  }
+}
