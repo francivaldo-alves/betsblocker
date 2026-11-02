@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { blocklistSyncService, SyncResult } from '@/services/blocklist-sync.service';
+import { protectionService } from '@/services/protection.service';
 import { SyncHistory } from '@/types';
 
 interface SyncState {
@@ -32,6 +33,10 @@ export const useSyncStore = create<SyncState>((set) => ({
     set({ isSyncing: true, syncError: null });
     try {
       const result = await blocklistSyncService.syncInitialBlocklist();
+      if (result.success) {
+        // Sem isso, a VPN ativa continuaria filtrando com as regras anteriores
+        await protectionService.updateBlocklist();
+      }
       const lastHistory = await blocklistSyncService.getLastSyncInfo();
       set({
         isSyncing: false,

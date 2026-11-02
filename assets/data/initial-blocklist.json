@@ -585,51 +585,6 @@
     "verifiedAt": "2026-11-01"
   },
   {
-    "domain": "*.vip",
-    "category": "wildcard_tlds",
-    "classificationStatus": "UNAUTHORIZED_CONFIRMED",
-    "blockStatus": "BLOCK",
-    "source": "official_source",
-    "evidence": "Bloqueio de TLD com alta incidência de caça-níqueis descartáveis (*.vip).",
-    "verifiedAt": "2026-11-01"
-  },
-  {
-    "domain": "*.win",
-    "category": "wildcard_tlds",
-    "classificationStatus": "UNAUTHORIZED_CONFIRMED",
-    "blockStatus": "BLOCK",
-    "source": "official_source",
-    "evidence": "Bloqueio de TLD frequentemente explorado por sites clones de apostas (*.win).",
-    "verifiedAt": "2026-11-01"
-  },
-  {
-    "domain": "*.club",
-    "category": "wildcard_tlds",
-    "classificationStatus": "UNAUTHORIZED_CONFIRMED",
-    "blockStatus": "BLOCK",
-    "source": "official_source",
-    "evidence": "Bloqueio abrangente de TLD de risco para jogos de azar (*.club).",
-    "verifiedAt": "2026-11-01"
-  },
-  {
-    "domain": "*.game",
-    "category": "wildcard_tlds",
-    "classificationStatus": "UNAUTHORIZED_CONFIRMED",
-    "blockStatus": "BLOCK",
-    "source": "official_source",
-    "evidence": "Bloqueio abrangente de TLD de cassinos digitais (*.game).",
-    "verifiedAt": "2026-11-01"
-  },
-  {
-    "domain": "*.games",
-    "category": "wildcard_tlds",
-    "classificationStatus": "UNAUTHORIZED_CONFIRMED",
-    "blockStatus": "BLOCK",
-    "source": "official_source",
-    "evidence": "Bloqueio abrangente de TLD de jogos de azar e caça-níqueis (*.games).",
-    "verifiedAt": "2026-11-01"
-  },
-  {
     "domain": "*.slot",
     "category": "wildcard_tlds",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",

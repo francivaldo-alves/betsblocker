@@ -18,6 +18,7 @@ export interface VpnEngineDriver {
   stopVpn(): Promise<void>;
   getVpnStatus(): Promise<ProtectionOperationalStatus>;
   updateRules(blockedDomains: string[]): Promise<void>;
+  setAdBlocking(enabled: boolean, allowedDomains: string[]): Promise<void>;
   checkDomain(domain: string): { blocked: boolean; matchedRule?: string };
 }
 
@@ -116,6 +117,16 @@ export class AndroidNativeVpnDriver implements VpnEngineDriver {
     }
   }
 
+  async setAdBlocking(enabled: boolean, allowedDomains: string[]): Promise<void> {
+    if (nativeVpnBlocker) {
+      try {
+        await nativeVpnBlocker.setAdBlocking(enabled, allowedDomains);
+      } catch (err: any) {
+        console.warn('Falha ao aplicar bloqueio de anúncios:', err?.message || err);
+      }
+    }
+  }
+
   checkDomain(domain: string): { blocked: boolean; matchedRule?: string } {
     if (!this.isRunning && this.currentMode !== 'AUDIT') {
       return { blocked: false };
@@ -173,6 +184,7 @@ export class ProtectionServiceImpl implements ProtectionService {
     const activeDomains = await domainService.getActiveBlocklist();
 
     try {
+      await this.applyAdBlocking();
       await this.driver.startVpn(activeDomains, settings.block_mode);
       this.currentStatus = 'RUNNING';
       await settingsRepository.updateSettings({ protection_enabled: 1 });
@@ -203,6 +215,18 @@ export class ProtectionServiceImpl implements ProtectionService {
   async updateBlocklist(): Promise<void> {
     const activeDomains = await domainService.getActiveBlocklist();
     await this.driver.updateRules(activeDomains);
+    await this.applyAdBlocking();
+  }
+
+  private async applyAdBlocking(): Promise<void> {
+    const settings = await settingsRepository.getSettings();
+    const nowIso = new Date().toISOString();
+    const exceptions = await exceptionRepository.listAll();
+    const allowedDomains = exceptions
+      .filter((e) => !e.expires_at || e.expires_at > nowIso)
+      .map((e) => e.domain);
+
+    await this.driver.setAdBlocking(settings.block_ads === 1, allowedDomains);
   }
 
   /**

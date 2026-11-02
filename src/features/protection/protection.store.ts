@@ -19,6 +19,7 @@ export const useProtectionStore = create<ProtectionState>((set, get) => ({
     protection_enabled: 0,
     notification_enabled: 1,
     automatic_sync: 1,
+    block_ads: 0,
     block_mode: 'STRICT',
     theme: 'system',
   },
@@ -71,8 +72,8 @@ export const useProtectionStore = create<ProtectionState>((set, get) => ({
   updateSettings: async (patch) => {
     const updated = await settingsRepository.updateSettings(patch);
     set({ settings: updated });
-    // Atualiza regras se o modo de bloqueio foi modificado
-    if (patch.block_mode) {
+    // Atualiza regras se o modo de bloqueio ou o filtro de anúncios foi modificado
+    if (patch.block_mode || patch.block_ads !== undefined) {
       await protectionService.updateBlocklist();
     }
   },

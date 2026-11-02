@@ -49,7 +49,7 @@ class ExpoVpnBlockerModule : Module() {
         return@AsyncFunction
       }
 
-      BetsBlockerVpnService.setBlockedDomains(blockedDomains)
+      BetsBlockerVpnService.setBlockedDomains(context, blockedDomains)
       val intent = Intent(context, BetsBlockerVpnService::class.java).apply {
         action = BetsBlockerVpnService.ACTION_START
       }
@@ -86,7 +86,24 @@ class ExpoVpnBlockerModule : Module() {
     }
 
     AsyncFunction("updateRules") { blockedDomains: List<String>, promise: Promise ->
-      BetsBlockerVpnService.setBlockedDomains(blockedDomains)
+      val context = appContext.reactContext ?: appContext.currentActivity
+      if (context == null) {
+        promise.reject("ERR_NO_CONTEXT", "Android Context não está disponível.", null)
+        return@AsyncFunction
+      }
+
+      BetsBlockerVpnService.setBlockedDomains(context, blockedDomains)
+      promise.resolve(true)
+    }
+
+    AsyncFunction("setAdBlocking") { enabled: Boolean, allowedDomains: List<String>, promise: Promise ->
+      val context = appContext.reactContext ?: appContext.currentActivity
+      if (context == null) {
+        promise.reject("ERR_NO_CONTEXT", "Android Context não está disponível.", null)
+        return@AsyncFunction
+      }
+
+      BetsBlockerVpnService.setAdBlocking(context, enabled, allowedDomains)
       promise.resolve(true)
     }
 

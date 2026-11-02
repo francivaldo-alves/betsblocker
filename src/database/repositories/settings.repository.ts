@@ -24,6 +24,7 @@ export class SettingsRepository {
         protection_enabled: 0,
         notification_enabled: 1,
         automatic_sync: 1,
+        block_ads: 0,
         block_mode: 'STRICT',
         theme: 'system',
       }
@@ -41,6 +42,7 @@ export class SettingsRepository {
       protection_enabled: patch.protection_enabled !== undefined ? patch.protection_enabled : current.protection_enabled,
       notification_enabled: patch.notification_enabled !== undefined ? patch.notification_enabled : current.notification_enabled,
       automatic_sync: patch.automatic_sync !== undefined ? patch.automatic_sync : current.automatic_sync,
+      block_ads: patch.block_ads !== undefined ? patch.block_ads : current.block_ads,
       block_mode: patch.block_mode !== undefined ? patch.block_mode : current.block_mode,
       theme: patch.theme !== undefined ? patch.theme : current.theme,
     };
@@ -50,6 +52,7 @@ export class SettingsRepository {
        SET protection_enabled = ?,
            notification_enabled = ?,
            automatic_sync = ?,
+           block_ads = ?,
            block_mode = ?,
            theme = ?
        WHERE id = 1;`,
@@ -57,6 +60,7 @@ export class SettingsRepository {
         updated.protection_enabled,
         updated.notification_enabled,
         updated.automatic_sync,
+        updated.block_ads,
         updated.block_mode,
         updated.theme,
       ]

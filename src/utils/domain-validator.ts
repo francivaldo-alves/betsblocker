@@ -3,6 +3,12 @@
  * as RFC 1034, 1035, 1123 e padrões IDNA (domínios internacionalizados).
  */
 
+// Únicos TLDs aceitos em curingas de um rótulo: *.com ou *.br derrubariam a internet inteira
+export const ALLOWED_WILDCARD_TLDS = new Set(['bet', 'casino', 'poker', 'slot', 'slots']);
+
+// Segundos níveis genéricos de TLDs de país: *.com.br equivale a um curinga de TLD
+const GENERIC_SECOND_LEVELS = new Set(['com', 'net', 'org', 'gov', 'edu', 'co']);
+
 // Domínios de infraestrutura crítica governamental e de rede que NUNCA devem ser bloqueados
 export const PROTECTED_SYSTEM_DOMAINS = new Set([
   'gov.br',
@@ -182,6 +188,19 @@ export function validateAndNormalizeDomain(input: string): DomainValidationResul
         error: `O rótulo "${label}" contém caracteres inválidos.`,
       };
     }
+  }
+
+  // Proteção contra curingas amplos demais
+  const isBroadWildcard =
+    isWildcard &&
+    ((labels.length === 1 && !ALLOWED_WILDCARD_TLDS.has(tld)) ||
+      (labels.length === 2 && tld.length === 2 && GENERIC_SECOND_LEVELS.has(labels[0])));
+  if (isBroadWildcard) {
+    return {
+      isValid: false,
+      original,
+      error: 'Este curinga é amplo demais e bloquearia sites legítimos.',
+    };
   }
 
   // Proteção contra domínios críticos

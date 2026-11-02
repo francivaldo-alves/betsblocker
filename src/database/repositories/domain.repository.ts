@@ -1,5 +1,6 @@
 import { getDatabase } from '../database';
 import { BlockedDomain, ClassificationStatus, BlockStatus } from '@/types';
+import { validateAndNormalizeDomain } from '@/utils/domain-validator';
 
 export interface DomainListFilter {
   search?: string;
@@ -105,7 +106,10 @@ export class DomainRepository {
          );`,
       [nowIso]
     );
-    return rows.map((r) => r.domain);
+    // Regras antigas gravadas antes das validações atuais não chegam ao motor de rede
+    return rows
+      .map((r) => r.domain)
+      .filter((domain) => validateAndNormalizeDomain(domain).isValid);
   }
 
   async upsert(domainData: Omit<BlockedDomain, 'id' | 'created_at' | 'updated_at'>): Promise<number> {

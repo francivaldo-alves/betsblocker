@@ -83,6 +83,7 @@ export interface ProtectionSettings {
   protection_enabled: number; // 0 ou 1 para compatibilidade SQLite
   notification_enabled: number;
   automatic_sync: number;
+  block_ads: number;
   block_mode: BlockMode;
   theme: AppTheme;
 }

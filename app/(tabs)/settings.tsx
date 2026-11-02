@@ -11,6 +11,7 @@ import {
 import {
   Settings,
   Bell,
+  EyeOff,
   RefreshCw,
   Shield,
   Palette,
@@ -36,6 +37,10 @@ export default function SettingsScreen() {
 
   const handleToggleNotifications = async (val: boolean) => {
     await updateSettings({ notification_enabled: val ? 1 : 0 });
+  };
+
+  const handleToggleBlockAds = async (val: boolean) => {
+    await updateSettings({ block_ads: val ? 1 : 0 });
   };
 
   const handleSetBlockMode = async (mode: BlockMode) => {
@@ -76,6 +81,25 @@ export default function SettingsScreen() {
           <Switch
             value={settings.automatic_sync === 1}
             onValueChange={handleToggleAutoSync}
+            trackColor={{ false: palette.grayLight, true: palette.teal }}
+            thumbColor={palette.white}
+          />
+        </View>
+
+        <View style={styles.settingRow}>
+          <View style={styles.settingTextWrapper}>
+            <View style={styles.settingLabelRow}>
+              <EyeOff size={18} color={palette.navy} />
+              <Text style={styles.settingLabel}>Bloquear Anúncios e Rastreadores</Text>
+            </View>
+            <Text style={styles.settingDescription}>
+              Filtra domínios conhecidos de publicidade, rastreamento e malware. Alguns sites podem
+              apresentar falhas; libere-os como exceção.
+            </Text>
+          </View>
+          <Switch
+            value={settings.block_ads === 1}
+            onValueChange={handleToggleBlockAds}
             trackColor={{ false: palette.grayLight, true: palette.teal }}
             thumbColor={palette.white}
           />

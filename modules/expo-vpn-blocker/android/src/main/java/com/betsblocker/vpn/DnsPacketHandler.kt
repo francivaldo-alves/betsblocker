@@ -10,6 +10,14 @@ import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.InetSocketAddress
 
+// Fotografia imutável das regras: a troca é atômica e a leitura não copia nada por pacote
+data class RuleSnapshot(
+  val blocked: Set<String> = emptySet(),
+  val wildcards: List<String> = emptyList(),
+  val allowed: Set<String> = emptySet(),
+  val adsTrackers: Set<String> = emptySet()
+)
+
 class DnsPacketHandler {
 
   companion object {
@@ -23,18 +31,39 @@ class DnsPacketHandler {
     )
   }
 
-  private var blockedRules: Set<String> = emptySet()
-  private var wildcardRules: List<String> = emptyList()
+  @Volatile
+  private var rules = RuleSnapshot()
 
-  fun updateRules(blocked: Set<String>, wildcards: List<String>) {
-    this.blockedRules = blocked
-    this.wildcardRules = wildcards
+  @Volatile
+  private var cachedUpstreams: List<InetAddress>? = null
+
+  fun updateRules(snapshot: RuleSnapshot) {
+    this.rules = snapshot
+  }
+
+  fun invalidateUpstreams() {
+    cachedUpstreams = null
+  }
+
+  /**
+   * Verifica o domínio e cada domínio pai (www.bet365.com -> bet365.com -> com)
+   */
+  private fun matchesDomainOrParent(domain: String, rules: Set<String>): Boolean {
+    var candidate = domain
+    while (true) {
+      if (rules.contains(candidate)) return true
+      val nextLabel = candidate.indexOf('.')
+      if (nextLabel < 0) return false
+      candidate = candidate.substring(nextLabel + 1)
+    }
   }
 
   /**
    * Obtém os servidores DNS reais da conexão ativa (Wi-Fi ou Dados Móveis)
    */
   private fun getUpstreamServers(context: Context): List<InetAddress> {
+    cachedUpstreams?.let { return it }
+
     val servers = mutableListOf<InetAddress>()
     try {
       val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
@@ -50,7 +79,7 @@ class DnsPacketHandler {
     } catch (_: Exception) {}
 
     servers.addAll(DEFAULT_FALLBACKS)
-    return servers.distinct()
+    return servers.distinct().also { cachedUpstreams = it }
   }
 
   /**
@@ -77,18 +106,22 @@ class DnsPacketHandler {
       return false
     }
 
-    // 2. Verifica se está na lista de bloqueios exatos
-    if (blockedRules.contains(clean)) return true
+    val current = rules
+
+    // 2. Verifica a lista de bloqueios, incluindo subdomínios
+    if (matchesDomainOrParent(clean, current.blocked)) return true
 
     // 3. Verifica se corresponde a uma regra curinga (*.bet, *.casino, etc.)
-    for (wildcard in wildcardRules) {
+    for (wildcard in current.wildcards) {
       val suffix = wildcard.removePrefix("*.")
       if (clean == suffix || clean.endsWith(".$suffix")) {
         return true
       }
     }
 
-    return false
+    // 4. Anúncios e rastreadores, respeitando as exceções do usuário
+    return matchesDomainOrParent(clean, current.adsTrackers) &&
+      !matchesDomainOrParent(clean, current.allowed)
   }
 
   fun handlePacket(
@@ -148,7 +181,10 @@ class DnsPacketHandler {
     val requestedDomain = domainSb.toString().lowercase().trim()
 
     if (isDomainBlocked(requestedDomain)) {
-      Log.i(TAG, "🚫 [BLOQUEIO REALIZADO] $requestedDomain")
+      // Ligar em testes: adb shell setprop log.tag.BetsBlockerDNS DEBUG
+      if (Log.isLoggable(TAG, Log.DEBUG)) {
+        Log.d(TAG, "🚫 [BLOQUEIO REALIZADO] $requestedDomain")
+      }
       // Responde imediatamente com NXDOMAIN (Código 3 - Domínio Inexistente)
       val dnsResp = ByteArray(12 + questionLen)
       dnsResp[0] = packet[dnsOffset]
@@ -176,7 +212,9 @@ class DnsPacketHandler {
 
       try {
         socket = DatagramSocket(null)
-        vpnService.protect(socket)
+        if (!vpnService.protect(socket)) {
+          Log.w(TAG, "protect() recusado para o socket de $requestedDomain")
+        }
         socket.soTimeout = 1000
         socket.bind(InetSocketAddress(0))
 
@@ -192,8 +230,9 @@ class DnsPacketHandler {
               replyBytes = inBuf.copyOf(inPacket.length)
               break // Sucesso na resolução
             }
-          } catch (_: Exception) {
+          } catch (e: Exception) {
             // Tenta o próximo DNS upstream da lista
+            Log.w(TAG, "Upstream ${upstream.hostAddress} falhou para $requestedDomain: ${e.message}")
           }
         }
       } catch (e: Exception) {
@@ -208,6 +247,8 @@ class DnsPacketHandler {
         writeUdpResponse(packet, srcPort, dstPort, replyBytes, outputStream)
       } else {
         // Fallback rápido se sem conexão
+        Log.e(TAG, "SERVFAIL para $requestedDomain: nenhum upstream respondeu")
+        invalidateUpstreams()
         val failResp = ByteArray(12 + questionLen)
         failResp[0] = packet[dnsOffset]
         failResp[1] = packet[dnsOffset + 1]

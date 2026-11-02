@@ -7,6 +7,7 @@ export interface VpnBlockerNativeModule {
   stopVpn(): Promise<boolean>;
   isVpnRunning(): Promise<boolean>;
   updateRules(blockedDomains: string[]): Promise<boolean>;
+  setAdBlocking(enabled: boolean, allowedDomains: string[]): Promise<boolean>;
 }
 
 let nativeModule: VpnBlockerNativeModule | null = null;

@@ -136,4 +136,14 @@ export const migration001: Migration = {
   },
 };
 
-export const migrations: Migration[] = [migration001];
+export const migration002: Migration = {
+  version: 2,
+  name: '002_add_block_ads_setting',
+  up: async (db) => {
+    await db.execAsync(
+      'ALTER TABLE protection_settings ADD COLUMN block_ads INTEGER NOT NULL DEFAULT 0;'
+    );
+  },
+};
+
+export const migrations: Migration[] = [migration001, migration002];
