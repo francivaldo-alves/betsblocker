@@ -1,0 +1,56 @@
+export const palette = {
+  navy: '#101D35',
+  navyDark: '#0B1424',
+  teal: '#087E8B',
+  tealLight: '#0E9AA7',
+  backgroundLight: '#F4F7FA',
+  backgroundDark: '#0D1524',
+  cardLight: '#FFFFFF',
+  cardDark: '#162238',
+  white: '#FFFFFF',
+  green: '#16A34A',
+  greenLight: '#DCFCE7',
+  red: '#DC2626',
+  redLight: '#FEE2E2',
+  gray: '#64748B',
+  grayLight: '#E2E8F0',
+  grayDark: '#334155',
+  textLight: '#0F172A',
+  textDark: '#F8FAFC',
+  textMutedLight: '#64748B',
+  textMutedDark: '#94A3B8',
+  borderLight: '#E2E8F0',
+  borderDark: '#1E293B',
+} as const;
+
+export const lightTheme = {
+  background: palette.backgroundLight,
+  surface: palette.cardLight,
+  primary: palette.navy,
+  accent: palette.teal,
+  text: palette.textLight,
+  textMuted: palette.textMutedLight,
+  border: palette.borderLight,
+  success: palette.green,
+  successBackground: palette.greenLight,
+  danger: palette.red,
+  dangerBackground: palette.redLight,
+  card: palette.cardLight,
+};
+
+export const darkTheme = {
+  background: palette.backgroundDark,
+  surface: palette.cardDark,
+  primary: palette.teal,
+  accent: palette.tealLight,
+  text: palette.textDark,
+  textMuted: palette.textMutedDark,
+  border: palette.borderDark,
+  success: palette.green,
+  successBackground: '#064E3B',
+  danger: palette.red,
+  dangerBackground: '#7F1D1D',
+  card: palette.cardDark,
+};
+
+export type Theme = typeof lightTheme;
