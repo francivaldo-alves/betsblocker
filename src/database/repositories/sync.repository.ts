@@ -1,5 +1,5 @@
 import { getDatabase } from '../database';
-import { SyncHistory, SyncStatus } from '@/types';
+import { SyncHistory } from '@/types';
 
 export class SyncRepository {
   async recordSync(

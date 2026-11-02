@@ -1,5 +1,6 @@
 import { ClassificationStatus, BlockStatus, ReviewStatus, BlockedDomain } from '@/types';
-import { domainRepository, reviewRepository, exceptionRepository } from '@/database';
+import { domainRepository, reviewRepository, settingsRepository } from '@/database';
+import { assertUnlocked } from './commitment.service';
 
 export interface ClassificationDecision {
   classificationStatus: ClassificationStatus;
@@ -101,6 +102,7 @@ export class ClassifierService {
       newClassification = 'UNAUTHORIZED_CONFIRMED';
       newBlockStatus = 'BLOCK';
     } else if (reviewStatus === 'REJECTED') {
+      assertUnlocked(await settingsRepository.getSettings());
       // Rejeitado da lista de risco -> autorizado / liberado
       newClassification = 'AUTHORIZED';
       newBlockStatus = 'ALLOW';

@@ -1,20 +1,25 @@
 import { getDatabase } from '../database';
 import { BlockEvent } from '@/types';
 
+export interface NewBlockEvent {
+  domain: string;
+  blockedAt: string;
+  reason: string;
+}
+
 export class EventRepository {
-  async recordEvent(
-    domain: string,
-    blockReason: string,
-    sourceId?: number | null
-  ): Promise<number> {
+  async recordEvents(events: NewBlockEvent[]): Promise<void> {
+    if (events.length === 0) return;
     const db = await getDatabase();
-    const nowIso = new Date().toISOString();
-    const res = await db.runAsync(
-      `INSERT INTO block_events (domain, blocked_at, block_reason, source_id)
-       VALUES (?, ?, ?, ?);`,
-      [domain.toLowerCase().trim(), nowIso, blockReason, sourceId ?? null]
-    );
-    return res.lastInsertRowId;
+    await db.withTransactionAsync(async () => {
+      for (const event of events) {
+        await db.runAsync(
+          `INSERT INTO block_events (domain, blocked_at, block_reason, source_id)
+           VALUES (?, ?, ?, NULL);`,
+          [event.domain, event.blockedAt, event.reason]
+        );
+      }
+    });
   }
 
   async listRecent(limit = 50, offset = 0): Promise<BlockEvent[]> {
@@ -27,28 +32,14 @@ export class EventRepository {
 
   async countToday(): Promise<number> {
     const db = await getDatabase();
-    const todayPrefix = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+    // Meia-noite no fuso do aparelho: blocked_at é UTC, e "hoje" para o usuário é local
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
     const result = await db.getFirstAsync<{ count: number }>(
-      'SELECT COUNT(*) as count FROM block_events WHERE blocked_at LIKE ?;',
-      [`${todayPrefix}%`]
+      'SELECT COUNT(*) as count FROM block_events WHERE blocked_at >= ?;',
+      [startOfDay.toISOString()]
     );
     return result?.count ?? 0;
-  }
-
-  async countTotal(): Promise<number> {
-    const db = await getDatabase();
-    const result = await db.getFirstAsync<{ count: number }>(
-      'SELECT COUNT(*) as count FROM block_events;'
-    );
-    return result?.count ?? 0;
-  }
-
-  async getLastEvent(): Promise<BlockEvent | null> {
-    const db = await getDatabase();
-    const result = await db.getFirstAsync<BlockEvent>(
-      'SELECT * FROM block_events ORDER BY blocked_at DESC, id DESC LIMIT 1;'
-    );
-    return result ?? null;
   }
 }
 

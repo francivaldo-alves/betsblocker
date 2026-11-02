@@ -4,7 +4,7 @@
     "category": "game_servers_and_apis",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Servidor e provedor de jogos caça-níqueis (PG Soft / Fortune Tiger).",
     "verifiedAt": "2026-11-01"
   },
@@ -13,7 +13,7 @@
     "category": "game_servers_and_apis",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "API de comunicação e carregamento de jogos PG Soft.",
     "verifiedAt": "2026-11-01"
   },
@@ -22,7 +22,7 @@
     "category": "game_servers_and_apis",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Endpoint de CDN/API de jogos caça-níqueis.",
     "verifiedAt": "2026-11-01"
   },
@@ -31,7 +31,7 @@
     "category": "game_servers_and_apis",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Provedora de jogos de cassino e apostas ao vivo.",
     "verifiedAt": "2026-11-01"
   },
@@ -40,7 +40,7 @@
     "category": "game_servers_and_apis",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "API de inicialização de jogos Pragmatic Play.",
     "verifiedAt": "2026-11-01"
   },
@@ -49,7 +49,7 @@
     "category": "game_servers_and_apis",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Desenvolvedora e distribuidora de crash games (Aviator).",
     "verifiedAt": "2026-11-01"
   },
@@ -58,7 +58,7 @@
     "category": "game_servers_and_apis",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "API de conexão em tempo real de crash games Spribe.",
     "verifiedAt": "2026-11-01"
   },
@@ -67,7 +67,7 @@
     "category": "game_servers_and_apis",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Provedora de streaming e jogos de cassino ao vivo e roletas.",
     "verifiedAt": "2026-11-01"
   },
@@ -76,7 +76,7 @@
     "category": "game_servers_and_apis",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "API de transmissão e apostas ao vivo Evolution Gaming.",
     "verifiedAt": "2026-11-01"
   },
@@ -85,7 +85,7 @@
     "category": "game_servers_and_apis",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Servidor de infraestrutura de apostas e caça-níqueis.",
     "verifiedAt": "2026-11-01"
   },
@@ -94,7 +94,7 @@
     "category": "game_servers_and_apis",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Provedor global de caça-níqueis online.",
     "verifiedAt": "2026-11-01"
   },
@@ -103,7 +103,7 @@
     "category": "game_servers_and_apis",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Provedor de jogos 3D de cassino e apostas online.",
     "verifiedAt": "2026-11-01"
   },
@@ -112,7 +112,7 @@
     "category": "clones_and_slots",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Plataforma de apostas sem outorga federal.",
     "verifiedAt": "2026-11-01"
   },
@@ -121,7 +121,7 @@
     "category": "clones_and_slots",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Plataforma de jogos de azar e caça-níqueis clandestina.",
     "verifiedAt": "2026-11-01"
   },
@@ -130,7 +130,7 @@
     "category": "clones_and_slots",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Site descartável de apostas e jogos de risco.",
     "verifiedAt": "2026-11-01"
   },
@@ -139,7 +139,7 @@
     "category": "clones_and_slots",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Plataforma de caça-níqueis não regulamentada.",
     "verifiedAt": "2026-11-01"
   },
@@ -148,7 +148,7 @@
     "category": "clones_and_slots",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Clone de cassino online sem autorização SPA/MF.",
     "verifiedAt": "2026-11-01"
   },
@@ -157,7 +157,7 @@
     "category": "clones_and_slots",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Clone de plataforma de apostas de quota fixa sem outorga.",
     "verifiedAt": "2026-11-01"
   },
@@ -166,7 +166,7 @@
     "category": "clones_and_slots",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Site de caça-níqueis e cassino ilegal.",
     "verifiedAt": "2026-11-01"
   },
@@ -175,7 +175,7 @@
     "category": "clones_and_slots",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Plataforma clonada para distribuição de jogos de azar.",
     "verifiedAt": "2026-11-01"
   },
@@ -184,7 +184,7 @@
     "category": "clones_and_slots",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Domínio descartável de caça-níqueis.",
     "verifiedAt": "2026-11-01"
   },
@@ -193,7 +193,7 @@
     "category": "clones_and_slots",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Plataforma não autorizada de caça-níqueis.",
     "verifiedAt": "2026-11-01"
   },
@@ -202,7 +202,7 @@
     "category": "clones_and_slots",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Site genérico de cassino e jogos de azar.",
     "verifiedAt": "2026-11-01"
   },
@@ -211,7 +211,7 @@
     "category": "clones_and_slots",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Plataforma não outorgada de apostas.",
     "verifiedAt": "2026-11-01"
   },
@@ -220,7 +220,7 @@
     "category": "clones_and_slots",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Landing page de redirecionamento para jogos de azar não regulados.",
     "verifiedAt": "2026-11-01"
   },
@@ -229,7 +229,7 @@
     "category": "clones_and_slots",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Portal não autorizado focado em caça-níqueis.",
     "verifiedAt": "2026-11-01"
   },
@@ -238,7 +238,7 @@
     "category": "clones_and_slots",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Site associado a caça-níqueis não homologados.",
     "verifiedAt": "2026-11-01"
   },
@@ -247,7 +247,7 @@
     "category": "clones_and_slots",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Plataforma de apostas sem autorização definitiva nacional.",
     "verifiedAt": "2026-11-01"
   },
@@ -256,7 +256,7 @@
     "category": "clones_and_slots",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Site não outorgado de apostas online.",
     "verifiedAt": "2026-11-01"
   },
@@ -265,7 +265,7 @@
     "category": "clones_and_slots",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Plataforma descartável de apostas de quota fixa.",
     "verifiedAt": "2026-11-01"
   },
@@ -274,7 +274,7 @@
     "category": "clones_and_slots",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Clone de cassino online clandestino.",
     "verifiedAt": "2026-11-01"
   },
@@ -283,7 +283,7 @@
     "category": "clones_and_slots",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Domínio .bet de alto risco para captação de apostas não autorizadas.",
     "verifiedAt": "2026-11-01"
   },
@@ -292,7 +292,7 @@
     "category": "clones_and_slots",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Plataforma de apostas sem homologação no Ministério da Fazenda.",
     "verifiedAt": "2026-11-01"
   },
@@ -301,7 +301,7 @@
     "category": "clones_and_slots",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Site de apostas de quota fixa sem licença válida.",
     "verifiedAt": "2026-11-01"
   },
@@ -310,7 +310,7 @@
     "category": "clones_and_slots",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Site descartável de cassino e apostas clandestinas.",
     "verifiedAt": "2026-11-01"
   },
@@ -319,7 +319,7 @@
     "category": "clones_and_slots",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Domínio associado a rede de caça-níqueis piratas.",
     "verifiedAt": "2026-11-01"
   },
@@ -328,7 +328,7 @@
     "category": "clones_and_slots",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Rede de apostas sem licença federal.",
     "verifiedAt": "2026-11-01"
   },
@@ -337,7 +337,7 @@
     "category": "major_betting_platforms",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Grande operadora de apostas com bloqueio configurado pelo usuário.",
     "verifiedAt": "2026-11-01"
   },
@@ -346,7 +346,7 @@
     "category": "major_betting_platforms",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Operadora de apostas e cassinos sob lista de bloqueio de risco.",
     "verifiedAt": "2026-11-01"
   },
@@ -355,7 +355,7 @@
     "category": "major_betting_platforms",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Plataforma de apostas e crash games sob ordens judiciais de bloqueio.",
     "verifiedAt": "2026-11-01"
   },
@@ -364,7 +364,7 @@
     "category": "major_betting_platforms",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Plataforma de apostas esportivas e jogos de cassino.",
     "verifiedAt": "2026-11-01"
   },
@@ -373,7 +373,7 @@
     "category": "major_betting_platforms",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Casa de apostas e cassino online.",
     "verifiedAt": "2026-11-01"
   },
@@ -382,7 +382,7 @@
     "category": "major_betting_platforms",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Operadora de apostas com múltiplos bloqueios regulatórios e notificações.",
     "verifiedAt": "2026-11-01"
   },
@@ -391,7 +391,7 @@
     "category": "major_betting_platforms",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Plataforma de cassino e jogos caça-níqueis.",
     "verifiedAt": "2026-11-01"
   },
@@ -400,7 +400,7 @@
     "category": "major_betting_platforms",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Casa de apostas esportivas e crash games.",
     "verifiedAt": "2026-11-01"
   },
@@ -409,7 +409,7 @@
     "category": "major_betting_platforms",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Plataforma de quota fixa e jogos de cassino.",
     "verifiedAt": "2026-11-01"
   },
@@ -418,7 +418,7 @@
     "category": "major_betting_platforms",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Cassino online com publicidade irregular e jogos de azar.",
     "verifiedAt": "2026-11-01"
   },
@@ -427,7 +427,7 @@
     "category": "major_betting_platforms",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Operadora de apostas e jogos de azar.",
     "verifiedAt": "2026-11-01"
   },
@@ -436,7 +436,7 @@
     "category": "major_betting_platforms",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Casa de apostas com investigações regulatórias em andamento.",
     "verifiedAt": "2026-11-01"
   },
@@ -445,7 +445,7 @@
     "category": "major_betting_platforms",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Plataforma de apostas esportivas e cassino.",
     "verifiedAt": "2026-11-01"
   },
@@ -454,7 +454,7 @@
     "category": "major_betting_platforms",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Casa de apostas de quota fixa e jogos online.",
     "verifiedAt": "2026-11-01"
   },
@@ -463,7 +463,7 @@
     "category": "major_betting_platforms",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Site de apostas esportivas e caça-níqueis.",
     "verifiedAt": "2026-11-01"
   },
@@ -472,7 +472,7 @@
     "category": "major_betting_platforms",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Bolsa de apostas e cassino online internacional.",
     "verifiedAt": "2026-11-01"
   },
@@ -481,7 +481,7 @@
     "category": "major_betting_platforms",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Plataforma de apostas esportivas e jogos de cassino.",
     "verifiedAt": "2026-11-01"
   },
@@ -490,7 +490,7 @@
     "category": "major_betting_platforms",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Casa de apostas esportivas internacional.",
     "verifiedAt": "2026-11-01"
   },
@@ -499,7 +499,7 @@
     "category": "major_betting_platforms",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Operadora global de apostas e cassinos.",
     "verifiedAt": "2026-11-01"
   },
@@ -508,7 +508,7 @@
     "category": "major_betting_platforms",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Plataforma de apostas esportivas e jogos de risco.",
     "verifiedAt": "2026-11-01"
   },
@@ -517,7 +517,7 @@
     "category": "major_betting_platforms",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Plataforma de apostas em criptomoedas e jogos de azar.",
     "verifiedAt": "2026-11-01"
   },
@@ -526,7 +526,7 @@
     "category": "major_betting_platforms",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Operadora internacional de apostas esportivas e caça-níqueis.",
     "verifiedAt": "2026-11-01"
   },
@@ -535,7 +535,7 @@
     "category": "major_betting_platforms",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Cassino cripto online e jogos de roleta/crash sem homologação.",
     "verifiedAt": "2026-11-01"
   },
@@ -544,7 +544,7 @@
     "category": "major_betting_platforms",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Site de pôquer e apostas online.",
     "verifiedAt": "2026-11-01"
   },
@@ -553,7 +553,7 @@
     "category": "major_betting_platforms",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Casa de apostas esportivas e cassino.",
     "verifiedAt": "2026-11-01"
   },
@@ -562,7 +562,7 @@
     "category": "wildcard_tlds",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Bloqueio abrangente de TLD dedicado a apostas de alto risco (*.bet).",
     "verifiedAt": "2026-11-01"
   },
@@ -571,7 +571,7 @@
     "category": "wildcard_tlds",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Bloqueio abrangente de TLD dedicado a cassinos online (*.casino).",
     "verifiedAt": "2026-11-01"
   },
@@ -580,7 +580,7 @@
     "category": "wildcard_tlds",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Bloqueio abrangente de TLD dedicado a pôquer online (*.poker).",
     "verifiedAt": "2026-11-01"
   },
@@ -589,7 +589,7 @@
     "category": "wildcard_tlds",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Bloqueio abrangente de TLD de caça-níqueis (*.slot).",
     "verifiedAt": "2026-11-01"
   },
@@ -598,8 +598,17 @@
     "category": "wildcard_tlds",
     "classificationStatus": "UNAUTHORIZED_CONFIRMED",
     "blockStatus": "BLOCK",
-    "source": "official_source",
+    "source": "curated_list",
     "evidence": "Bloqueio abrangente de TLD de caça-níqueis (*.slots).",
     "verifiedAt": "2026-11-01"
+  },
+  {
+    "domain": "*.bet.br",
+    "category": "licensed_operators",
+    "classificationStatus": "UNAUTHORIZED_CONFIRMED",
+    "blockStatus": "BLOCK",
+    "source": "curated_list",
+    "evidence": "Domínio usado pelas operadoras de apostas licenciadas no Brasil.",
+    "verifiedAt": "2026-11-02"
   }
 ]

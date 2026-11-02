@@ -2,44 +2,56 @@
 
 ## 1. Princípios de Privacidade e Proteção de Dados (LGPD)
 
-O aplicativo **BetsBlocker** adota a premissa de **Zero-Backend** e **Local-Only Processing**:
+O aplicativo **BetsBlocker** não tem backend próprio e processa tudo no aparelho:
 
-1. **Armazenamento 100% Local:** Todas as tabelas relacionais, listas de domínios, registros de auditoria, notas de revisão e histórico de eventos residem exclusivamente no SQLite local do dispositivo Android.
-2. **Não Coleta de Histórico de Navegação:** O aplicativo não atua como rastreador, proxy de interceptação de conteúdo ou analisador de tráfego HTTP. Ele não grava páginas visitadas, cookies, cabeçalhos nem dados de formulários.
-3. **Registro Restrito a Eventos de Segurança:** Somente quando uma consulta DNS corresponde a um domínio listado como restrito em `blocked_domains` (e sem exceção ativa) é que um registro de bloqueio (`block_events`) é gerado localmente.
-4. **Sem Telemetria ou Envio Remoto:** Nenhuma informação sobre consultas de rede, endereço IP ou identificadores do dispositivo é transmitida a servidores remotos.
-5. **Execução de Código Seguro:** Arquivos de atualização (`initial-blocklist.json` e manifesto) contêm apenas dados estáticos JSON parseados com Zod. O aplicativo rejeita e não executa nenhum script, bytecode ou comando vindo de fontes externas.
-
----
-
-## 2. Limitações Técnicas e Regulatórias
-
-1. **Não Bloqueio Absoluto:**
-   - Nenhum sistema de filtragem de rede local pode garantir 100% de bloqueio. Operadores clandestinos criam novos subdomínios, redirecionamentos e espelhos dinâmicos (mirror domains) com alta frequência.
-   - O aplicativo atua como camada de proteção preventiva com base nas relações oficiais vigentes.
-
-2. **DNS Criptografado e DNS Privado (DoT / DoH):**
-   - No Android 9 ou superior, quando a funcionalidade *DNS Privado* (Private DNS) está configurada com um provedor externo que utiliza DNS-over-TLS (porta 853), certas requisições de sistema podem ignorar o DNS da interface loopback local caso o `VpnService` não redirecione especificamente as portas 853 e 443.
-   - O modo *Estrito* do BetsBlocker intercepta o tráfego DNS convencional (UDP/TCP 53) e reporta ao usuário a necessidade de manter o DNS Privado configurado para modo automático ou desativado em redes locais protegidas.
-
-3. **Execução em Segundo Plano no Android (Doze Mode):**
-   - O sistema de gerenciamento de bateria agressivo de certos fabricantes de hardware Android (MIUI, OneUI, etc.) pode suspender processos em segundo plano. O motor de proteção deve ser configurado como *Serviço de Primeiro Plano* (`Foreground Service`) com notificação persistente para assegurar filtragem contínua.
-
-4. **Necessidade de Expo Development Build para Interceptação de Rede Real:**
-   - O aplicativo Expo em sua camada JavaScript/TypeScript está 100% pronto e estruturado. Porém, o módulo nativo que implementa o `android.net.VpnService` só opera dentro de um **Expo Development Build** (`eas build --profile development` ou `npx expo run:android`), pois a runtime do Expo Go não inclui módulos nativos de rede personalizados.
-   - O BetsBlocker adota a diretriz de **não simular proteção**: se o ambiente não possuir o driver nativo ativo, o aplicativo informa abertamente que a proteção está inoperante.
+1. **Armazenamento local:** listas de domínios, ajustes, revisões e histórico de bloqueios ficam no SQLite do dispositivo Android.
+2. **Sem leitura de conteúdo:** o app não atua como proxy e não vê páginas, cookies, cabeçalhos ou formulários. Ele vê apenas os nomes de domínio das consultas DNS.
+3. **O que é gravado:** só tentativas de acesso a domínios de apostas (`block_events`). Antes de chegarem ao SQLite, elas ficam em um arquivo privado do app, porque a VPN funciona com o app fechado.
+4. **Domínios Recentes:** os últimos 200 domínios permitidos ficam apenas em memória e são apagados ao desativar a proteção. Eles nunca vão para o disco nem para o logcat.
+5. **O que sai do aparelho:** consultas permitidas seguem para o DNS da rede atual. Se ele falhar, seguem para Google (8.8.8.8, 8.8.4.4) ou Cloudflare (1.1.1.1). Quando a atualização remota estiver configurada, o app também baixa a lista do endereço definido em `app.json`. Não há telemetria.
+6. **Listas são dados:** arquivos de lista contêm apenas JSON validado com Zod. A lista remota só é aceita com assinatura ECDSA P-256 válida.
 
 ---
 
-## 3. Fontes Oficiais e Governança
+## 2. Limitações Técnicas
 
-- **Ministério da Fazenda (SPA/MF):** Relações de empresas autorizadas a operar apostas de quota fixa conforme a Lei nº 14.790/2023 e portarias correlatas.
-- **SIGAP (Sistema de Gestão de Apostas):** Base de consulta de pedidos e homologações.
-- **Notificações Anatel:** Listagens de despachos determinando o bloqueio de sítios não autorizados pelas prestadoras de telecomunicações.
+1. **Não há bloqueio absoluto:** novos domínios e espelhos surgem com frequência. A proteção é preventiva e depende da lista.
+
+2. **O filtro atua só no DNS:** apps que usam DNS criptografado próprio (DoH/DoT, como navegadores configurados com "DNS seguro"), endereços IP fixos ou outra VPN não passam pelo filtro. Por usar a VPN do Android, o BetsBlocker não funciona junto com outra VPN.
+
+3. **DNS privado do Android:** verifique em aparelho real se um provedor configurado manualmente ignora o filtro. O app ainda não detecta nem avisa sobre esse caso.
+
+4. **Apenas UDP:** a interface virtual atende consultas DNS por UDP. Quando uma resposta não cabe, o próprio app repete a consulta por TCP no servidor e devolve o resultado por UDP. Consultas enviadas diretamente por TCP ficam sem resposta.
+
+5. **Segundo plano:** a proteção roda como serviço em primeiro plano, religa após reiniciar o aparelho ou atualizar o app e aceita a opção "VPN sempre ativa" do Android. Fabricantes com gestão agressiva de bateria ainda podem encerrá-la; nesse caso, o app mostra "INTERROMPIDO" e religa ao ser aberto, se a permissão continuar válida.
+
+6. **A trava de compromisso cria atrito, não impedimento:** ela depende do relógio do aparelho e não impede desinstalar o app ou revogar a VPN nas configurações do Android.
+
+7. **Módulo nativo obrigatório:** a proteção só existe em build Android do app (`npx expo run:android` ou EAS). No Expo Go, iOS e web, o app informa que ela está indisponível, sem simular proteção.
 
 ---
 
-## 4. Guia de Compilação para Dispositivo Físico (EAS Build)
+## 3. Lista de Bloqueio e Atualizações
+
+- **Procedência:** a lista embutida é uma curadoria do projeto, não uma publicação oficial do Ministério da Fazenda ou da Anatel. Confirme cada domínio antes de divulgá-lo como oficial.
+- **Casas licenciadas:** `*.bet.br` usa a categoria `licensed_operators` e pode ser desligado em Ajustes. A regra vem ligada porque o público do app quer parar de apostar, não só evitar sites ilegais.
+- **Atualizar a lista embutida:** edite `assets/data/initial-blocklist.json` e rode `node scripts/build-blocklist.mjs <versão>`.
+- **Publicar lista remota:**
+  1. Gere a chave com `node scripts/build-blocklist.mjs --generate-key blocklist-private.pem` e guarde-a fora do repositório.
+  2. Coloque a chave pública em `extra.blocklist.publicKey` no `app.json`, junto de `manifestUrl` e `listUrl`.
+  3. Gere o manifesto assinado com `node scripts/build-blocklist.mjs <versão> blocklist-private.pem`.
+  4. Publique os dois arquivos em `assets/data` sem alterar nenhum byte.
+
+---
+
+## 4. Antes de Publicar
+
+- **Google Play:** revise as regras de `VpnService` e a declaração exigida. O bloqueio de anúncios de outros apps pode violar a política de abuso de dispositivo e rede.
+- **Licenças:** o arquivo `LICENSE` ainda é o da Expo. A lista de anúncios inclui HaGeZi (GPL-3.0) e StevenBlack (MIT): avalie as obrigações antes de distribuir o app.
+
+---
+
+## 5. Guia de Compilação para Dispositivo Físico (EAS Build)
 
 Para gerar o APK ou Android App Bundle definitivo com suporte ao serviço local:
 

@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "betsblocker",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true
     },
@@ -37,6 +37,11 @@
       "typedRoutes": true
     },
     "extra": {
+      "blocklist": {
+        "manifestUrl": "",
+        "listUrl": "",
+        "publicKey": ""
+      },
       "router": {
         "asyncRoutes": {
           "web": true

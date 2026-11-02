@@ -14,9 +14,7 @@ import {
   Search,
   Plus,
   ShieldAlert,
-  ShieldCheck,
   Calendar,
-  Info,
   X,
   CheckCircle2,
 } from 'lucide-react-native';
@@ -26,7 +24,6 @@ import { ClassificationBadge, BlockStatusBadge } from '@/components/Badge';
 import { EmptyState } from '@/components/EmptyState';
 import { useDomainsStore } from '@/features/domains/domains.store';
 import { BlockedDomain } from '@/types';
-import { domainService } from '@/services/domain.service';
 
 export default function BlockedSitesScreen() {
   const {
@@ -51,7 +48,7 @@ export default function BlockedSitesScreen() {
 
   useEffect(() => {
     loadBlockedDomains();
-  }, []);
+  }, [loadBlockedDomains]);
 
   const handleAddDomain = async () => {
     if (!inputDomain.trim()) {
@@ -73,7 +70,7 @@ export default function BlockedSitesScreen() {
       setInputEvidence('');
       setModalType('NONE');
     } else {
-      Alert.alert('Erro', 'Não foi possível cadastrar o domínio. Verifique o formato.');
+      Alert.alert('Erro', useDomainsStore.getState().error || 'Não foi possível cadastrar o domínio.');
     }
   };
 
@@ -94,7 +91,7 @@ export default function BlockedSitesScreen() {
       setModalType('NONE');
       setSelectedDomain(null);
     } else {
-      Alert.alert('Erro', 'Falha ao registrar exceção.');
+      Alert.alert('Não Liberado', useDomainsStore.getState().error || 'Falha ao registrar exceção.');
     }
   };
 
@@ -188,7 +185,7 @@ export default function BlockedSitesScreen() {
               description={
                 searchQuery
                   ? 'Nenhum resultado encontrado para a busca informada.'
-                  : 'Nenhum domínio restrito cadastrado no momento. Sincronize as listas no Dashboard.'
+                  : 'Nenhum domínio restrito cadastrado no momento. Procure atualizações no Dashboard.'
               }
             />
           ) : undefined

@@ -6,7 +6,7 @@ import {
   FlatList,
   TouchableOpacity,
 } from 'react-native';
-import { History, ShieldAlert, CheckCircle, XCircle, Calendar, Tag } from 'lucide-react-native';
+import { History, ShieldAlert, Calendar } from 'lucide-react-native';
 import { palette } from '@/theme/colors';
 import { Card } from '@/components/Card';
 import { Badge } from '@/components/Badge';
@@ -22,7 +22,7 @@ export default function HistoryScreen() {
   useEffect(() => {
     loadSyncHistory();
     loadBlockEvents();
-  }, []);
+  }, [loadSyncHistory, loadBlockEvents]);
 
   const renderSyncItem = ({ item }: { item: SyncHistory }) => (
     <Card style={styles.historyCard}>
@@ -66,7 +66,10 @@ export default function HistoryScreen() {
         <Text style={styles.eventDomain} numberOfLines={1}>
           {item.domain}
         </Text>
-        <Badge label="Interceptado" variant="danger" />
+        <Badge
+          label={item.block_reason.startsWith('Modo auditoria') ? 'Registrado' : 'Bloqueado'}
+          variant={item.block_reason.startsWith('Modo auditoria') ? 'warning' : 'danger'}
+        />
       </View>
 
       <Text style={styles.eventReason}>{item.block_reason}</Text>
@@ -136,7 +139,7 @@ export default function HistoryScreen() {
               <EmptyState
                 icon={ShieldAlert}
                 title="Nenhum bloqueio registrado"
-                description="Quando o serviço interceptar requisições para domínios proibidos, elas serão catalogadas aqui."
+                description="Tentativas de acesso a sites de apostas aparecem aqui, mesmo as feitas com o app fechado."
               />
             ) : undefined
           }

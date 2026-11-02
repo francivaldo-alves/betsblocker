@@ -15,9 +15,7 @@ export type ReviewStatus = 'APPROVED' | 'REJECTED' | 'SUSPENDED';
 
 export type SyncStatus = 'SUCCESS' | 'FAILED' | 'PARTIAL';
 
-export type BlockMode = 'STRICT' | 'PERMISSIVE' | 'AUDIT';
-
-export type AppTheme = 'light' | 'dark' | 'system';
+export type BlockMode = 'STRICT' | 'AUDIT';
 
 export interface BlockedDomain {
   id: number;
@@ -84,8 +82,10 @@ export interface ProtectionSettings {
   notification_enabled: number;
   automatic_sync: number;
   block_ads: number;
+  block_licensed: number;
   block_mode: BlockMode;
-  theme: AppTheme;
+  commitment_delay_hours: number; // 0 desliga o atraso para reduzir a proteção
+  unlock_requested_at: string | null;
 }
 
 export interface BlocklistManifest {
@@ -94,6 +94,7 @@ export interface BlocklistManifest {
   source: string;
   recordCount: number;
   checksum: string;
+  signature?: string;
 }
 
 export interface BlocklistEntry {
@@ -112,12 +113,6 @@ export type ProtectionOperationalStatus =
   | 'RUNNING'
   | 'ERROR'
   | 'PERMISSION_REQUIRED';
-
-export interface ProtectionStats {
-  blockedCountToday: number;
-  lastBlockedDomain?: string;
-  lastBlockedAt?: string;
-}
 
 export interface ProtectionService {
   requestPermission(): Promise<boolean>;

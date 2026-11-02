@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -27,26 +27,17 @@ import { useProtectionStore } from '@/features/protection/protection.store';
 import { useSyncStore } from '@/features/synchronization/sync.store';
 import { useHistoryStore } from '@/features/history/history.store';
 import { protectionService } from '@/services/protection.service';
+import { requestNotificationPermission } from '@/utils/notifications';
 
 export default function DashboardScreen() {
   const { totalBlocked, totalPending, loadBlockedDomains, loadPendingDomains } =
     useDomainsStore();
-  const { settings, operationalStatus, loadSettings, toggleProtection } =
-    useProtectionStore();
-  const { lastSync, isSyncing, syncError, loadLastSync, syncInitialList } =
-    useSyncStore();
-  const { todayBlockedCount, loadBlockEvents } = useHistoryStore();
+  const { settings, operationalStatus, toggleProtection } = useProtectionStore();
+  const { lastSync, isSyncing, syncError, syncNow } = useSyncStore();
+  const { todayBlockedCount } = useHistoryStore();
 
   const [testDomain, setTestDomain] = useState('');
   const [isTesting, setIsTesting] = useState(false);
-
-  useEffect(() => {
-    loadSettings();
-    loadLastSync();
-    loadBlockedDomains();
-    loadPendingDomains();
-    loadBlockEvents();
-  }, []);
 
   const handleTestDomain = async () => {
     if (!testDomain.trim()) {
@@ -59,27 +50,33 @@ export default function DashboardScreen() {
     }
 
     setIsTesting(true);
-    const result = await protectionService.evaluateAndIntercept(testDomain.trim());
-    setIsTesting(false);
-    await loadBlockEvents();
-
-    if (!result.allowed) {
-      Alert.alert(
-        '🚫 ACESSO BLOQUEADO PELO BETSBLOCKER',
-        `${result.reason}\n\nO evento foi registrado na auditoria local SQLite.`
-      );
-    } else {
-      Alert.alert('✅ ACESSO PERMITIDO', result.reason);
+    try {
+      const decision = await protectionService.checkDomain(testDomain);
+      if (decision === 'ALLOW') {
+        Alert.alert('✅ Domínio Permitido', 'Nenhuma regra ativa bloqueia este domínio.');
+      } else {
+        const rule = decision === 'GAMBLING' ? 'lista de apostas' : 'lista de anúncios e rastreadores';
+        Alert.alert(
+          settings.block_mode === 'AUDIT' ? '👁️ Seria Bloqueado' : '🚫 Domínio Bloqueado',
+          `O domínio corresponde à ${rule}.`
+        );
+      }
+    } catch (err: any) {
+      Alert.alert('Teste Indisponível', err?.message || 'Não foi possível consultar o motor.');
+    } finally {
+      setIsTesting(false);
     }
   };
 
   const handleSync = async () => {
-    const res = await syncInitialList();
-    if (res.success) {
-      await Promise.all([loadBlockedDomains(), loadPendingDomains(), loadLastSync()]);
+    const res = await syncNow();
+    if (res.upToDate) {
+      Alert.alert('Lista em Dia', `A versão ${res.version} já é a mais recente disponível.`);
+    } else if (res.success) {
+      await Promise.all([loadBlockedDomains(), loadPendingDomains()]);
       Alert.alert(
         'Sincronização Concluída',
-        `Versão ${res.version} processada com sucesso!\n${res.addedRecords} novos domínios adicionados.\n${res.updatedRecords} domínios atualizados.`
+        `Versão ${res.version} aplicada.\n${res.addedRecords} novos, ${res.updatedRecords} atualizados, ${res.removedRecords} removidos.`
       );
     } else {
       Alert.alert('Falha na Sincronização', res.error || 'Erro ao sincronizar listas.');
@@ -87,6 +84,9 @@ export default function DashboardScreen() {
   };
 
   const handleToggleProtection = async () => {
+    if (!isProtectionRunning && settings.notification_enabled === 1) {
+      await requestNotificationPermission();
+    }
     const res = await toggleProtection();
     if (res.success) {
       Alert.alert(
@@ -97,13 +97,29 @@ export default function DashboardScreen() {
       );
     } else {
       Alert.alert(
-        'Proteção Inoperante',
-        res.message || 'O serviço nativo de VPN local requer um Expo Development Build para operar.'
+        res.active ? 'Proteção Mantida' : 'Proteção Inoperante',
+        res.message || 'Não foi possível alterar a proteção.'
       );
     }
   };
 
   const isProtectionRunning = operationalStatus === 'RUNNING';
+  const isProtectionInterrupted = operationalStatus === 'ERROR';
+  const isAuditMode = isProtectionRunning && settings.block_mode === 'AUDIT';
+  const protectionSubtitle = isAuditMode
+    ? 'Modo auditoria: acessos são registrados, mas nada é bloqueado'
+    : isProtectionRunning
+      ? 'Proteção local ativa no dispositivo'
+      : isProtectionInterrupted
+        ? 'A proteção foi interrompida. Você está sem filtro agora'
+        : 'Proteção desativada';
+  const protectionBadge = isAuditMode
+    ? 'AUDITORIA'
+    : isProtectionRunning
+      ? 'ATIVO'
+      : isProtectionInterrupted
+        ? 'INTERROMPIDO'
+        : 'INATIVO';
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -120,14 +136,12 @@ export default function DashboardScreen() {
           <View style={styles.protectionTextWrapper}>
             <Text style={styles.protectionTitle}>Estado da Proteção</Text>
             <Text style={styles.protectionSubtitle}>
-              {isProtectionRunning
-                ? 'Proteção local ativa no dispositivo'
-                : 'Proteção desativada pelo usuário'}
+              {protectionSubtitle}
             </Text>
           </View>
           <Badge
-            label={isProtectionRunning ? 'ATIVO' : 'INATIVO'}
-            variant={isProtectionRunning ? 'success' : 'danger'}
+            label={protectionBadge}
+            variant={isAuditMode ? 'warning' : isProtectionRunning ? 'success' : 'danger'}
           />
         </View>
 
@@ -137,7 +151,11 @@ export default function DashboardScreen() {
         >
           <Power size={18} color={palette.white} style={{ marginRight: 8 }} />
           <Text style={styles.toggleButtonText}>
-            {isProtectionRunning ? 'Desativar Proteção' : 'Ativar Proteção'}
+            {isProtectionRunning
+              ? 'Desativar Proteção'
+              : isProtectionInterrupted
+                ? 'Reativar Proteção'
+                : 'Ativar Proteção'}
           </Text>
         </TouchableOpacity>
       </Card>
@@ -161,7 +179,7 @@ export default function DashboardScreen() {
       <Card>
         <View style={styles.cardHeader}>
           <FileText size={20} color={palette.navy} />
-          <Text style={styles.cardTitle}>Interceptações Registradas Hoje</Text>
+          <Text style={styles.cardTitle}>Sites de Apostas Bloqueados Hoje</Text>
         </View>
         <Text style={styles.statNumberLarge}>{todayBlockedCount}</Text>
         <Text style={styles.helperText}>
@@ -176,7 +194,7 @@ export default function DashboardScreen() {
           <Text style={styles.cardTitle}>Testar Bloqueio em Tempo Real</Text>
         </View>
         <Text style={styles.helperText}>
-          Experimente testar qualquer domínio restrito (ex: blaze.com, api.pgsoft.com, qualquer.bet) para verificar o motor de proteção:
+          Pergunte ao motor de proteção o que ele faria com um domínio (ex: blaze.com, qualquer.bet). O teste não acessa o site nem entra no histórico.
         </Text>
         <View style={styles.testInputRow}>
           <TextInput
@@ -212,7 +230,7 @@ export default function DashboardScreen() {
         <View style={styles.syncMetaRow}>
           <Text style={styles.syncMetaLabel}>Última Versão Aplicada:</Text>
           <Text style={styles.syncMetaValue}>
-            {lastSync ? `Versão ${lastSync.version}` : 'Nenhuma (base inicial pendente)'}
+            {lastSync ? `Versão ${lastSync.version}` : 'Preparando lista inicial'}
           </Text>
         </View>
 
@@ -241,7 +259,7 @@ export default function DashboardScreen() {
             <>
               <RefreshCw size={18} color={palette.white} style={{ marginRight: 8 }} />
               <Text style={styles.syncButtonText}>
-                {totalBlocked === 0 ? 'Importar Lista Inicial Oficial' : 'Sincronizar Atualizações'}
+                Procurar Atualizações
               </Text>
             </>
           )}

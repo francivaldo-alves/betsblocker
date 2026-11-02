@@ -1,8 +1,15 @@
 import * as Crypto from 'expo-crypto';
+import Constants from 'expo-constants';
 import { z } from 'zod';
-import { getDatabase, syncRepository, sourceRepository, exceptionRepository } from '@/database';
+import { getDatabase, syncRepository, sourceRepository } from '@/database';
 import { validateAndNormalizeDomain } from '@/utils/domain-validator';
 import { BlocklistManifest, BlocklistEntry, SyncHistory } from '@/types';
+import nativeVpnBlocker from '../../modules/expo-vpn-blocker/src';
+
+const OFFICIAL_SOURCE_ID = 1;
+const CURATED_SOURCE_ID = 2;
+const REMOTE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const MAX_REMOTE_LIST_LENGTH = 5 * 1024 * 1024;
 
 // Esquema Zod de validação do manifesto
 export const blocklistManifestSchema = z.object({
@@ -10,7 +17,8 @@ export const blocklistManifestSchema = z.object({
   generatedAt: z.string().min(1, 'A data de geração é obrigatória.'),
   source: z.string().min(1, 'A origem da lista é obrigatória.'),
   recordCount: z.number().int().nonnegative('A contagem de registros não pode ser negativa.'),
-  checksum: z.string().min(16, 'O checksum SHA-256 é obrigatório.'),
+  checksum: z.string().regex(/^[0-9a-fA-F]{64}$/, 'O checksum SHA-256 é obrigatório.'),
+  signature: z.string().min(1).optional(),
 });
 
 // Esquema Zod de validação de cada registro da lista
@@ -37,7 +45,43 @@ export interface SyncResult {
   addedRecords: number;
   updatedRecords: number;
   removedRecords: number;
+  upToDate?: boolean;
   error?: string;
+}
+
+export interface RemoteBlocklistConfig {
+  manifestUrl: string;
+  listUrl: string;
+  publicKey: string;
+}
+
+export function failedSync(error: string, version = 0): SyncResult {
+  return {
+    success: false,
+    version,
+    totalRecords: 0,
+    addedRecords: 0,
+    updatedRecords: 0,
+    removedRecords: 0,
+    error,
+  };
+}
+
+function upToDateSync(version: number): SyncResult {
+  return {
+    success: true,
+    upToDate: true,
+    version,
+    totalRecords: 0,
+    addedRecords: 0,
+    updatedRecords: 0,
+    removedRecords: 0,
+  };
+}
+
+// Mesma mensagem assinada por scripts/build-blocklist.mjs
+export function signedManifestMessage(manifest: BlocklistManifest): string {
+  return `${manifest.version}:${manifest.checksum.toLowerCase()}`;
 }
 
 export class BlocklistSyncService {
@@ -125,6 +169,7 @@ export class BlocklistSyncService {
   /**
    * Executa a sincronização atômica no banco SQLite.
    * Se qualquer etapa falhar, faz rollback automático e preserva a versão anterior intacta.
+   * Decisões locais (domínios do usuário e revisões) nunca são sobrescritas pela lista.
    */
   async sync(
     rawManifest: unknown,
@@ -141,39 +186,44 @@ export class BlocklistSyncService {
       );
       manifestVersion = manifest.version;
 
+      const lastSync = await syncRepository.getLastSuccessfulSync();
+      if (lastSync && manifest.version < lastSync.version) {
+        throw new Error(
+          `A versão ${manifest.version} é anterior à versão aplicada (${lastSync.version}).`
+        );
+      }
+
       let added = 0;
       let updated = 0;
+      let removed = 0;
       const nowIso = new Date().toISOString();
 
-      // Executa toda a atualização dentro de uma transação SQLite ACID
-      await db.withTransactionAsync(async () => {
+      // Conexão exclusiva: nenhuma consulta de outra tela entra por engano nesta transação
+      await db.withExclusiveTransactionAsync(async (txn) => {
+        const rows = await txn.getAllAsync<{
+          id: number;
+          domain: string;
+          classification_status: string;
+          source_id: number;
+          reviewed: number;
+        }>(
+          `SELECT b.id, b.domain, b.classification_status, b.source_id,
+                  EXISTS (SELECT 1 FROM domain_reviews r WHERE r.domain_id = b.id) AS reviewed
+           FROM blocked_domains b;`
+        );
+        const existingByDomain = new Map(rows.map((row) => [row.domain, row]));
+        const isLocalDecision = (row: (typeof rows)[number]) =>
+          row.reviewed === 1 || row.classification_status === 'USER_ADDED';
+
         for (const item of entries) {
-          // Verifica se o domínio possui exceção ativa pelo usuário
-          const isExcepted = await exceptionRepository.isDomainExcepted(item.domain);
-
-          // Decisão de bloqueio respeita exceções ativas do usuário
-          const finalBlockStatus = isExcepted ? 'ALLOW' : item.blockStatus;
-
-          const existing = await db.getFirstAsync<{
-            id: number;
-            classification_status: string;
-            block_status: string;
-          }>('SELECT id, classification_status, block_status FROM blocked_domains WHERE domain = ? LIMIT 1;', [
-            item.domain,
-          ]);
-
-          // Mapeia source_id padrão (1 para fontes oficiais, 2 para comunidade)
-          const sourceId = item.source === 'official_source' ? 1 : 2;
+          const sourceId = item.source === 'official_source' ? OFFICIAL_SOURCE_ID : CURATED_SOURCE_ID;
+          const existing = existingByDomain.get(item.domain);
 
           if (existing) {
-            // Se o usuário adicionou manualmente (USER_ADDED), preserva a classificação do usuário
-            const classification =
-              existing.classification_status === 'USER_ADDED'
-                ? 'USER_ADDED'
-                : item.classificationStatus;
+            if (isLocalDecision(existing)) continue;
 
-            await db.runAsync(
-              `UPDATE blocked_domains 
+            await txn.runAsync(
+              `UPDATE blocked_domains
                SET category = ?,
                    classification_status = ?,
                    block_status = ?,
@@ -184,8 +234,8 @@ export class BlocklistSyncService {
                WHERE id = ?;`,
               [
                 item.category,
-                classification,
-                finalBlockStatus,
+                item.classificationStatus,
+                item.blockStatus,
                 sourceId,
                 item.evidence,
                 item.verifiedAt,
@@ -195,7 +245,7 @@ export class BlocklistSyncService {
             );
             updated++;
           } else {
-            await db.runAsync(
+            await txn.runAsync(
               `INSERT INTO blocked_domains (
                 domain, category, classification_status, block_status, source_id, evidence, verified_at, created_at, updated_at
               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
@@ -203,7 +253,7 @@ export class BlocklistSyncService {
                 item.domain,
                 item.category,
                 item.classificationStatus,
-                finalBlockStatus,
+                item.blockStatus,
                 sourceId,
                 item.evidence,
                 item.verifiedAt,
@@ -215,19 +265,25 @@ export class BlocklistSyncService {
           }
         }
 
-        // Atualiza carimbo de consulta nas fontes oficiais
-        await sourceRepository.updateLastChecked(1, nowIso);
+        // Domínios que saíram da lista deixam de valer, salvo decisão local
+        const listed = new Set(entries.map((item) => item.domain));
+        for (const row of rows) {
+          if (!listed.has(row.domain) && !isLocalDecision(row)) {
+            await txn.runAsync('DELETE FROM blocked_domains WHERE id = ?;', [row.id]);
+            removed++;
+          }
+        }
+      });
 
-        // Registra histórico de sincronização com sucesso
-        await syncRepository.recordSync({
-          version: manifest.version,
-          total_records: entries.length,
-          added_records: added,
-          updated_records: updated,
-          removed_records: 0,
-          status: 'SUCCESS',
-          error_message: null,
-        });
+      await sourceRepository.updateLastChecked(CURATED_SOURCE_ID, nowIso);
+      await syncRepository.recordSync({
+        version: manifest.version,
+        total_records: entries.length,
+        added_records: added,
+        updated_records: updated,
+        removed_records: removed,
+        status: 'SUCCESS',
+        error_message: null,
       });
 
       return {
@@ -236,7 +292,7 @@ export class BlocklistSyncService {
         totalRecords: entries.length,
         addedRecords: added,
         updatedRecords: updated,
-        removedRecords: 0,
+        removedRecords: removed,
       };
     } catch (error: any) {
       const errorMessage = error?.message || 'Erro desconhecido durante a sincronização.';
@@ -256,31 +312,108 @@ export class BlocklistSyncService {
         // Ignora erro secundário de log
       }
 
-      return {
-        success: false,
-        version: manifestVersion,
-        totalRecords: 0,
-        addedRecords: 0,
-        updatedRecords: 0,
-        removedRecords: 0,
-        error: errorMessage,
-      };
+      return failedSync(errorMessage, manifestVersion);
     }
   }
 
   /**
-   * Sincroniza a lista embutida no pacote (initial-blocklist.json)
+   * Aplica a lista embutida no pacote se ela for mais nova que a versão em uso:
+   * cobre a primeira abertura e as atualizações do app.
    */
-  async syncInitialBlocklist(): Promise<SyncResult> {
-    // Carrega os arquivos embutidos
-    const manifest = require('../../assets/data/blocklist-manifest.json');
+  async ensureBundledList(): Promise<SyncResult> {
+    const manifest = require('../../assets/data/blocklist-manifest.json') as BlocklistManifest;
+    const lastSync = await syncRepository.getLastSuccessfulSync();
+    if (lastSync && lastSync.version >= manifest.version) {
+      return upToDateSync(lastSync.version);
+    }
+
     const rawListJson = JSON.stringify(
       require('../../assets/data/initial-blocklist.json'),
       null,
       2
     );
-
     return this.sync(manifest, rawListJson);
+  }
+
+  /**
+   * Endereços e chave vêm de app.json (extra.blocklist); sem eles, não há atualização remota
+   */
+  getRemoteConfig(): RemoteBlocklistConfig | null {
+    const config = Constants.expoConfig?.extra?.blocklist as
+      | Partial<RemoteBlocklistConfig>
+      | undefined;
+    if (!config?.manifestUrl || !config.listUrl || !config.publicKey) {
+      return null;
+    }
+    return {
+      manifestUrl: config.manifestUrl,
+      listUrl: config.listUrl,
+      publicKey: config.publicKey,
+    };
+  }
+
+  /**
+   * Baixa a lista publicada. Só aplica manifesto assinado pela chave embutida no app.
+   */
+  async syncRemote(): Promise<SyncResult> {
+    const config = this.getRemoteConfig();
+    if (!config) {
+      return failedSync('A atualização remota da lista não está configurada.');
+    }
+
+    try {
+      const response = await fetch(config.manifestUrl);
+      if (!response.ok) {
+        throw new Error(`Servidor respondeu ${response.status} ao buscar o manifesto.`);
+      }
+      const rawManifest: unknown = await response.json();
+      const parsed = blocklistManifestSchema.safeParse(rawManifest);
+      if (!parsed.success) {
+        throw new Error('Manifesto remoto com formato inválido.');
+      }
+      const manifest = parsed.data as BlocklistManifest;
+
+      if (!manifest.signature || !nativeVpnBlocker) {
+        throw new Error('Manifesto remoto sem assinatura verificável.');
+      }
+      const trusted = await nativeVpnBlocker.verifySignature(
+        signedManifestMessage(manifest),
+        manifest.signature,
+        config.publicKey
+      );
+      if (!trusted) {
+        throw new Error('Assinatura do manifesto remoto inválida.');
+      }
+
+      const lastSync = await syncRepository.getLastSuccessfulSync();
+      await sourceRepository.updateLastChecked(CURATED_SOURCE_ID, new Date().toISOString());
+      if (lastSync && manifest.version <= lastSync.version) {
+        return upToDateSync(lastSync.version);
+      }
+
+      const listResponse = await fetch(config.listUrl);
+      if (!listResponse.ok) {
+        throw new Error(`Servidor respondeu ${listResponse.status} ao buscar a lista.`);
+      }
+      const rawList = await listResponse.text();
+      if (rawList.length > MAX_REMOTE_LIST_LENGTH) {
+        throw new Error('A lista remota excede o tamanho permitido.');
+      }
+
+      return this.sync(manifest, rawList);
+    } catch (error: any) {
+      return failedSync(error?.message || 'Falha ao atualizar a lista remota.');
+    }
+  }
+
+  /**
+   * Evita consultar o servidor a cada abertura do app
+   */
+  async isRemoteCheckDue(): Promise<boolean> {
+    if (!this.getRemoteConfig()) return false;
+    const source = await sourceRepository.findById(CURATED_SOURCE_ID);
+    if (!source?.last_checked_at) return true;
+    return Date.now() - new Date(source.last_checked_at).getTime() >= REMOTE_CHECK_INTERVAL_MS;
   }
 
   /**

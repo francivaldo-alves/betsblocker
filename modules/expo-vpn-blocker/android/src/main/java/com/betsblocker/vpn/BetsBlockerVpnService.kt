@@ -17,8 +17,8 @@ import androidx.core.app.NotificationCompat
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ExecutorService
-import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -35,14 +35,49 @@ class BetsBlockerVpnService : VpnService() {
     private const val ADS_TRACKERS_ASSET = "ads-trackers.txt"
     private const val PREFS_NAME = "vpn_blocker"
     private const val PREF_BLOCK_ADS = "block_ads"
-    private const val PREF_ALLOWED_DOMAINS = "allowed_domains"
+    private const val PREF_EXCEPTIONS = "domain_exceptions"
+    private const val PREF_AUDIT_ONLY = "audit_only"
+    private const val PREF_NOTIFY_BLOCKS = "notify_blocks"
+    private const val PREF_SHOULD_RUN = "should_run"
+    private const val MAX_RECENT_DOMAINS = 200
+    private const val MAX_QUEUED_PACKETS = 128
 
     @Volatile
     var isRunning: Boolean = false
       private set
 
     @Volatile
+    var lastStartError: String? = null
+      private set
+
+    @Volatile
     private var activeRules = RuleSnapshot()
+
+    // Mantido só em memória: revela os sites acessados, então nunca vai para o disco
+    private val recentDomains = object : LinkedHashMap<String, Boolean>(MAX_RECENT_DOMAINS, 0.75f, true) {
+      override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>): Boolean {
+        return size > MAX_RECENT_DOMAINS
+      }
+    }
+
+    fun recordRecentDomain(domain: String) {
+      if (!domain.contains('.') || domain.endsWith(".arpa")) return
+      synchronized(recentDomains) {
+        recentDomains[domain] = true
+      }
+    }
+
+    fun getRecentDomains(): List<String> {
+      synchronized(recentDomains) {
+        return recentDomains.keys.reversed()
+      }
+    }
+
+    private fun clearRecentDomains() {
+      synchronized(recentDomains) {
+        recentDomains.clear()
+      }
+    }
 
     fun setBlockedDomains(context: Context, domains: List<String>) {
       synchronized(this) {
@@ -73,43 +108,75 @@ class BetsBlockerVpnService : VpnService() {
           }
         }
 
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        applyAdBlocking(
+        val prefs = prefs(context)
+        applyFilterOptions(
           context,
           prefs.getBoolean(PREF_BLOCK_ADS, false),
-          prefs.getStringSet(PREF_ALLOWED_DOMAINS, emptySet()) ?: emptySet()
+          decodeExceptions(prefs.getStringSet(PREF_EXCEPTIONS, emptySet()) ?: emptySet()),
+          prefs.getBoolean(PREF_AUDIT_ONLY, false),
+          prefs.getBoolean(PREF_NOTIFY_BLOCKS, false)
         )
       }
     }
 
-    fun setAdBlocking(context: Context, enabled: Boolean, allowedDomains: List<String>) {
+    fun setFilterOptions(
+      context: Context,
+      blockAds: Boolean,
+      exceptions: Map<String, Long>,
+      auditOnly: Boolean,
+      notifyBlocks: Boolean
+    ) {
       synchronized(this) {
-        val allowed = allowedDomains.map { it.trim().lowercase() }.toSet()
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
-          .putBoolean(PREF_BLOCK_ADS, enabled)
-          .putStringSet(PREF_ALLOWED_DOMAINS, allowed)
+        val normalized = exceptions.mapKeys { it.key.trim().lowercase().removePrefix("*.") }
+        prefs(context).edit()
+          .putBoolean(PREF_BLOCK_ADS, blockAds)
+          .putStringSet(PREF_EXCEPTIONS, normalized.map { "${it.key}|${it.value}" }.toSet())
+          .putBoolean(PREF_AUDIT_ONLY, auditOnly)
+          .putBoolean(PREF_NOTIFY_BLOCKS, notifyBlocks)
           .apply()
-        applyAdBlocking(context, enabled, allowed)
+        applyFilterOptions(context, blockAds, normalized, auditOnly, notifyBlocks)
       }
     }
 
-    private fun applyAdBlocking(context: Context, enabled: Boolean, allowed: Set<String>) {
+    private fun decodeExceptions(encoded: Set<String>): Map<String, Long> {
+      return encoded.associate { entry ->
+        val separator = entry.lastIndexOf('|')
+        entry.substring(0, separator) to entry.substring(separator + 1).toLong()
+      }
+    }
+
+    private fun applyFilterOptions(
+      context: Context,
+      blockAds: Boolean,
+      exceptions: Map<String, Long>,
+      auditOnly: Boolean,
+      notifyBlocks: Boolean
+    ) {
+      // A lista de anúncios só ocupa memória enquanto a VPN está de pé
       val adsTrackers = when {
-        !enabled -> emptySet()
-        activeRules.adsTrackers.isNotEmpty() -> activeRules.adsTrackers
-        else -> loadAdsTrackers(context)
+        !blockAds || !isRunning -> null
+        else -> activeRules.adsTrackers ?: loadAdsTrackers(context)
       }
-      activeRules = activeRules.copy(allowed = allowed, adsTrackers = adsTrackers)
+      BlockEventLog.notificationsEnabled = notifyBlocks
+      activeRules = activeRules.copy(
+        exceptions = exceptions,
+        adsTrackers = adsTrackers,
+        auditOnly = auditOnly
+      )
     }
 
-    private fun loadAdsTrackers(context: Context): Set<String> {
+    private fun loadAdsTrackers(context: Context): SortedDomainSet? {
       return try {
-        context.assets.open(ADS_TRACKERS_ASSET).bufferedReader().useLines { lines ->
-          lines.filter { it.isNotBlank() && !it.startsWith("#") }.toHashSet()
-        }
+        SortedDomainSet.fromBytes(context.assets.open(ADS_TRACKERS_ASSET).use { it.readBytes() })
       } catch (e: Exception) {
         Log.e(TAG, "Falha ao carregar lista de anúncios: ${e.message}")
-        emptySet()
+        null
+      }
+    }
+
+    private fun releaseAdsTrackers() {
+      synchronized(this) {
+        activeRules = activeRules.copy(adsTrackers = null)
       }
     }
 
@@ -119,13 +186,22 @@ class BetsBlockerVpnService : VpnService() {
     }
 
     fun getRules(): RuleSnapshot = activeRules
+
+    private fun prefs(context: Context) =
+      context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    fun setShouldRun(context: Context, shouldRun: Boolean) {
+      prefs(context).edit().putBoolean(PREF_SHOULD_RUN, shouldRun).apply()
+    }
+
+    fun shouldRun(context: Context): Boolean = prefs(context).getBoolean(PREF_SHOULD_RUN, false)
   }
 
   private var vpnInterface: ParcelFileDescriptor? = null
   private val isThreadRunning = AtomicBoolean(false)
   private var workerThread: Thread? = null
   private var threadPool: ExecutorService? = null
-  private val packetHandler = DnsPacketHandler()
+  private val packetHandler = DnsPacketHandler(::getRules)
   private var isNetworkCallbackRegistered = false
 
   // Os servidores DNS só mudam com a rede, então não é preciso consultá-los a cada pergunta
@@ -149,32 +225,35 @@ class BetsBlockerVpnService : VpnService() {
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-    when (intent?.action) {
-      ACTION_STOP -> {
-        stopVpn()
-        return START_NOT_STICKY
-      }
-      ACTION_START, null -> {
-        startVpn()
-        return START_STICKY
-      }
+    if (intent?.action == ACTION_STOP) {
+      stopVpn()
+      return START_NOT_STICKY
     }
-    return START_NOT_STICKY
+
+    // ACTION_START, recriação pelo sistema (null) ou VPN sempre ativa (android.net.VpnService)
+    startVpn()
+    return if (isRunning) START_STICKY else START_NOT_STICKY
   }
 
   private fun startVpn() {
-    if (isRunning) return
-
+    // Antes de tudo: startForegroundService exige esta chamada mesmo com a VPN já de pé
     try {
       startForeground(NOTIFICATION_ID, buildNotification())
     } catch (e: Exception) {
       Log.e(TAG, "Falha ao entrar em primeiro plano: ${e.message}")
     }
 
+    if (isRunning) return
+    lastStartError = null
+
     try {
       val builder = Builder().apply {
         setSession("BetsBlocker")
         setMtu(1500)
+        // Sem isto, o Android trataria toda rede como tarifada enquanto a VPN estiver ativa
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+          setMetered(false)
+        }
         // Endereço local da interface virtual (Cliente no subnet /24)
         addAddress("10.111.222.1", 24)
         // Define o DNS do sistema para o gateway virtual dedicado no mesmo subnet
@@ -189,15 +268,22 @@ class BetsBlockerVpnService : VpnService() {
 
       vpnInterface = builder.establish()
       if (vpnInterface == null) {
-        stopSelf()
+        lastStartError = "O Android não autorizou a VPN do BetsBlocker."
+        stopVpn()
         return
       }
 
       isRunning = true
       isThreadRunning.set(true)
-      // Threads ociosas são encerradas: o tráfego DNS chega em rajadas curtas
+      // Threads ociosas são encerradas: o tráfego DNS chega em rajadas curtas.
+      // Sem rede, as consultas mais antigas são descartadas: quem perguntou já desistiu delas
       threadPool = ThreadPoolExecutor(
-        16, 16, 30L, TimeUnit.SECONDS, LinkedBlockingQueue()
+        16,
+        16,
+        30L,
+        TimeUnit.SECONDS,
+        ArrayBlockingQueue(MAX_QUEUED_PACKETS),
+        ThreadPoolExecutor.DiscardOldestPolicy()
       ).apply { allowCoreThreadTimeOut(true) }
       registerNetworkCallback()
 
@@ -208,6 +294,7 @@ class BetsBlockerVpnService : VpnService() {
       }
     } catch (e: Exception) {
       Log.e(TAG, "Falha ao iniciar a VPN: ${e.message}")
+      lastStartError = e.message ?: "Falha ao iniciar a VPN."
       stopVpn()
     }
   }
@@ -227,7 +314,6 @@ class BetsBlockerVpnService : VpnService() {
         if (length < 0) break
         if (length > 0) {
           val packetCopy = buffer.copyOf(length)
-          packetHandler.updateRules(getRules())
 
           threadPool?.execute {
             try {
@@ -270,6 +356,8 @@ class BetsBlockerVpnService : VpnService() {
   private fun stopVpn() {
     isRunning = false
     unregisterNetworkCallback()
+    clearRecentDomains()
+    releaseAdsTrackers()
     isThreadRunning.set(false)
     workerThread?.interrupt()
     workerThread = null

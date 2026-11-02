@@ -1,0 +1,2 @@
+# Domínios retirados da lista por serem necessários ao funcionamento de serviços
+grs.hicloud.com

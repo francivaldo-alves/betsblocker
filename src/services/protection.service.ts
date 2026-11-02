@@ -1,273 +1,145 @@
-import {
-  ProtectionService,
-  ProtectionOperationalStatus,
-  BlockMode,
-} from '@/types';
+import { ProtectionService, ProtectionOperationalStatus } from '@/types';
+import { blocklistSyncService } from './blocklist-sync.service';
+import { assertUnlocked } from './commitment.service';
 import { domainService } from './domain.service';
 import { settingsRepository, eventRepository, exceptionRepository } from '@/database';
-import { matchesBlockedDomain } from '@/utils/domain-validator';
-import nativeVpnBlocker from '../../modules/expo-vpn-blocker/src';
+import nativeVpnBlocker, {
+  NativeBlockEvent,
+  NativeDomainDecision,
+  VpnBlockerNativeModule,
+} from '../../modules/expo-vpn-blocker/src';
+
+const START_TIMEOUT_MS = 3000;
+const START_POLL_MS = 100;
+const NEVER_EXPIRES = 0;
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const UNAVAILABLE_MESSAGE =
+  'A proteção de rede não está disponível aqui: ela exige o aplicativo instalado no Android, fora do Expo Go.';
 
 /**
- * Interface para adaptadores de motor de proteção
- */
-export interface VpnEngineDriver {
-  isAvailable(): boolean;
-  requestVpnPermission(): Promise<boolean>;
-  startVpn(blockedDomains: string[], mode: BlockMode): Promise<void>;
-  stopVpn(): Promise<void>;
-  getVpnStatus(): Promise<ProtectionOperationalStatus>;
-  updateRules(blockedDomains: string[]): Promise<void>;
-  setAdBlocking(enabled: boolean, allowedDomains: string[]): Promise<void>;
-  checkDomain(domain: string): { blocked: boolean; matchedRule?: string };
-}
-
-/**
- * Driver nativo de proteção local com filtragem de domínios em memória,
- * persistência SQLite e integração com VpnService Android (DNS Sinkhole).
- */
-export class AndroidNativeVpnDriver implements VpnEngineDriver {
-  private activeRules: Set<string> = new Set();
-  private wildcardRules: string[] = [];
-  private isRunning = false;
-  private currentMode: BlockMode = 'STRICT';
-
-  isAvailable(): boolean {
-    return true;
-  }
-
-  async requestVpnPermission(): Promise<boolean> {
-    if (nativeVpnBlocker) {
-      try {
-        return await nativeVpnBlocker.requestVpnPermission();
-      } catch {
-        return true;
-      }
-    }
-    return true;
-  }
-
-  async startVpn(blockedDomains: string[], mode: BlockMode): Promise<void> {
-    this.currentMode = mode;
-    this.activeRules.clear();
-    this.wildcardRules = [];
-
-    for (const rule of blockedDomains) {
-      const clean = rule.toLowerCase().trim();
-      if (clean.startsWith('*.')) {
-        this.wildcardRules.push(clean);
-      } else {
-        this.activeRules.add(clean);
-      }
-    }
-
-    if (nativeVpnBlocker) {
-      try {
-        await nativeVpnBlocker.startVpn(blockedDomains);
-      } catch (err: any) {
-        console.warn('VpnService nativo não iniciado:', err?.message || err);
-      }
-    }
-
-    this.isRunning = true;
-  }
-
-  async stopVpn(): Promise<void> {
-    if (nativeVpnBlocker) {
-      try {
-        await nativeVpnBlocker.stopVpn();
-      } catch (err: any) {
-        console.warn('Falha ao parar VpnService nativo:', err?.message || err);
-      }
-    }
-    this.isRunning = false;
-    this.activeRules.clear();
-    this.wildcardRules = [];
-  }
-
-  async getVpnStatus(): Promise<ProtectionOperationalStatus> {
-    if (nativeVpnBlocker) {
-      try {
-        const running = await nativeVpnBlocker.isVpnRunning();
-        return running ? 'RUNNING' : 'STOPPED';
-      } catch {
-        return this.isRunning ? 'RUNNING' : 'STOPPED';
-      }
-    }
-    return this.isRunning ? 'RUNNING' : 'STOPPED';
-  }
-
-  async updateRules(blockedDomains: string[]): Promise<void> {
-    this.activeRules.clear();
-    this.wildcardRules = [];
-
-    for (const rule of blockedDomains) {
-      const clean = rule.toLowerCase().trim();
-      if (clean.startsWith('*.')) {
-        this.wildcardRules.push(clean);
-      } else {
-        this.activeRules.add(clean);
-      }
-    }
-
-    if (nativeVpnBlocker) {
-      try {
-        await nativeVpnBlocker.updateRules(blockedDomains);
-      } catch (_: any) {}
-    }
-  }
-
-  async setAdBlocking(enabled: boolean, allowedDomains: string[]): Promise<void> {
-    if (nativeVpnBlocker) {
-      try {
-        await nativeVpnBlocker.setAdBlocking(enabled, allowedDomains);
-      } catch (err: any) {
-        console.warn('Falha ao aplicar bloqueio de anúncios:', err?.message || err);
-      }
-    }
-  }
-
-  checkDomain(domain: string): { blocked: boolean; matchedRule?: string } {
-    if (!this.isRunning && this.currentMode !== 'AUDIT') {
-      return { blocked: false };
-    }
-
-    const cleanTarget = domain.toLowerCase().trim();
-
-    // 1. Verifica correspondência direta ou subdomínio em regras exatas
-    for (const rule of this.activeRules) {
-      if (matchesBlockedDomain(cleanTarget, rule)) {
-        return { blocked: true, matchedRule: rule };
-      }
-    }
-
-    // 2. Verifica correspondência em regras curinga (*.bet, *.casino, etc.)
-    for (const wildcard of this.wildcardRules) {
-      if (matchesBlockedDomain(cleanTarget, wildcard)) {
-        return { blocked: true, matchedRule: wildcard };
-      }
-    }
-
-    return { blocked: false };
-  }
-}
-
-/**
- * Implementação do serviço de proteção seguindo o contrato ProtectionService
+ * Motor de proteção. Sem o módulo nativo não existe proteção, então nada aqui finge sucesso:
+ * operações essenciais falham e as demais não têm o que atualizar.
  */
 export class ProtectionServiceImpl implements ProtectionService {
-  private driver: VpnEngineDriver;
-  private currentStatus: ProtectionOperationalStatus = 'STOPPED';
+  constructor(private native: VpnBlockerNativeModule | null = nativeVpnBlocker) {}
 
-  constructor(driver?: VpnEngineDriver) {
-    this.driver = driver || new AndroidNativeVpnDriver();
-  }
-
-  setDriver(driver: VpnEngineDriver) {
-    this.driver = driver;
+  private requireNative(): VpnBlockerNativeModule {
+    if (!this.native) {
+      throw new Error(UNAVAILABLE_MESSAGE);
+    }
+    return this.native;
   }
 
   async requestPermission(): Promise<boolean> {
-    return this.driver.requestVpnPermission();
+    return this.requireNative().requestVpnPermission();
   }
 
   async startProtection(): Promise<void> {
-    const hasPermission = await this.driver.requestVpnPermission();
-    if (!hasPermission) {
-      this.currentStatus = 'STOPPED';
+    const native = this.requireNative();
+
+    if (!(await native.requestVpnPermission())) {
       await settingsRepository.updateSettings({ protection_enabled: 0 });
       throw new Error('Permissão de conexão VPN não foi concedida pelo usuário no Android.');
     }
 
-    const settings = await settingsRepository.getSettings();
-    this.currentStatus = 'STARTING';
+    await blocklistSyncService.ensureBundledList();
     const activeDomains = await domainService.getActiveBlocklist();
-
-    try {
-      await this.applyAdBlocking();
-      await this.driver.startVpn(activeDomains, settings.block_mode);
-      this.currentStatus = 'RUNNING';
-      await settingsRepository.updateSettings({ protection_enabled: 1 });
-    } catch (err: any) {
-      this.currentStatus = 'ERROR';
-      await settingsRepository.updateSettings({ protection_enabled: 0 });
-      throw new Error(`Falha ao iniciar o serviço de proteção local: ${err?.message || err}`);
+    if (activeDomains.length === 0) {
+      throw new Error('A lista de bloqueio está vazia: a proteção não teria efeito.');
     }
+
+    await this.applyFilterOptions();
+    await native.startVpn(activeDomains);
+    await this.waitUntilRunning(native);
+    await settingsRepository.updateSettings({ protection_enabled: 1 });
+  }
+
+  // startVpn só pede o início do serviço: a confirmação vem do estado real da VPN
+  private async waitUntilRunning(native: VpnBlockerNativeModule): Promise<void> {
+    for (let elapsed = 0; elapsed < START_TIMEOUT_MS; elapsed += START_POLL_MS) {
+      if (await native.isVpnRunning()) return;
+      await wait(START_POLL_MS);
+    }
+    const reason = await native.getLastStartError();
+    throw new Error(reason || 'O serviço de VPN não iniciou a tempo.');
   }
 
   async stopProtection(): Promise<void> {
-    try {
-      await this.driver.stopVpn();
-    } finally {
-      this.currentStatus = 'STOPPED';
-      await settingsRepository.updateSettings({ protection_enabled: 0 });
-    }
+    assertUnlocked(await settingsRepository.getSettings());
+    await this.requireNative().stopVpn();
+    await settingsRepository.updateSettings({ protection_enabled: 0 });
   }
 
   async getStatus(): Promise<ProtectionOperationalStatus> {
+    const running = (await this.native?.isVpnRunning()) ?? false;
+    if (running) return 'RUNNING';
+
     const settings = await settingsRepository.getSettings();
-    if (settings.protection_enabled === 0) {
-      return 'STOPPED';
-    }
-    return this.driver.getVpnStatus();
-  }
-
-  async updateBlocklist(): Promise<void> {
-    const activeDomains = await domainService.getActiveBlocklist();
-    await this.driver.updateRules(activeDomains);
-    await this.applyAdBlocking();
-  }
-
-  private async applyAdBlocking(): Promise<void> {
-    const settings = await settingsRepository.getSettings();
-    const nowIso = new Date().toISOString();
-    const exceptions = await exceptionRepository.listAll();
-    const allowedDomains = exceptions
-      .filter((e) => !e.expires_at || e.expires_at > nowIso)
-      .map((e) => e.domain);
-
-    await this.driver.setAdBlocking(settings.block_ads === 1, allowedDomains);
+    // O usuário quer a proteção ligada e ela não está: interrupção, não desligamento
+    return settings.protection_enabled === 1 ? 'ERROR' : 'STOPPED';
   }
 
   /**
-   * Avalia um domínio em tempo real contra as regras ativas e exceções locais
+   * Religa a VPN que caiu, desde que isso não exija abrir a tela de permissão do sistema
    */
-  async evaluateAndIntercept(domain: string): Promise<{
-    allowed: boolean;
-    reason: string;
-    matchedRule?: string;
-  }> {
-    const cleanDomain = domain.toLowerCase().trim();
+  async restoreIfInterrupted(): Promise<void> {
+    if (!this.native || (await this.getStatus()) !== 'ERROR') return;
+    if (!(await this.native.hasVpnPermission())) return;
+    await this.startProtection();
+  }
 
-    // 1. Verifica se possui exceção ativa no banco SQLite
-    const isExcepted = await exceptionRepository.isDomainExcepted(cleanDomain);
-    if (isExcepted) {
-      return {
-        allowed: true,
-        reason: 'Domínio liberado manualmente por regra de exceção do usuário.',
-      };
+  async updateBlocklist(): Promise<void> {
+    if (!this.native) return;
+    await this.native.updateRules(await domainService.getActiveBlocklist());
+    await this.applyFilterOptions();
+  }
+
+  async getRecentDomains(): Promise<string[]> {
+    return this.native?.getRecentDomains() ?? [];
+  }
+
+  private async applyFilterOptions(): Promise<void> {
+    if (!this.native) return;
+    const settings = await settingsRepository.getSettings();
+    const exceptions: Record<string, number> = {};
+    for (const exception of await exceptionRepository.listAll()) {
+      exceptions[exception.domain] = exception.expires_at
+        ? new Date(exception.expires_at).getTime()
+        : NEVER_EXPIRES;
     }
 
-    // 2. Consulta o motor de filtragem de regras
-    const check = this.driver.checkDomain(cleanDomain);
+    await this.native.setFilterOptions(
+      settings.block_ads === 1,
+      exceptions,
+      settings.block_mode === 'AUDIT',
+      settings.notification_enabled === 1
+    );
+  }
 
-    if (check.blocked && check.matchedRule) {
-      const reason = `Intervenção do BetsBlocker: Domínio restrito identificado pela regra "${check.matchedRule}".`;
+  /**
+   * Traz para o SQLite os bloqueios feitos pelo motor nativo enquanto o app estava fechado
+   */
+  async importBlockEvents(): Promise<void> {
+    if (!this.native) return;
+    const events: NativeBlockEvent[] = await this.native.drainBlockEvents();
+    await eventRepository.recordEvents(
+      events.map((event) => ({
+        domain: event.domain,
+        blockedAt: new Date(event.blockedAt).toISOString(),
+        reason: event.audited
+          ? 'Modo auditoria: acesso registrado, sem bloqueio.'
+          : 'Acesso bloqueado pela lista de sites de apostas.',
+      }))
+    );
+  }
 
-      // Registra evento de bloqueio no SQLite
-      await eventRepository.recordEvent(cleanDomain, reason);
-
-      return {
-        allowed: false,
-        reason,
-        matchedRule: check.matchedRule,
-      };
-    }
-
-    return {
-      allowed: true,
-      reason: 'Domínio sem correspondência em listas de apostas não autorizadas.',
-    };
+  /**
+   * Pergunta ao motor nativo o que aconteceria com o domínio, sem registrar evento
+   */
+  async checkDomain(domain: string): Promise<NativeDomainDecision> {
+    return this.requireNative().checkDomain(domain.toLowerCase().trim());
   }
 }
 

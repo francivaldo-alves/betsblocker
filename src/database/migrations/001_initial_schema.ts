@@ -146,4 +146,34 @@ export const migration002: Migration = {
   },
 };
 
-export const migrations: Migration[] = [migration001, migration002];
+export const migration003: Migration = {
+  version: 3,
+  name: '003_commitment_and_exception_model',
+  up: async (db) => {
+    await db.execAsync(`
+      ALTER TABLE protection_settings ADD COLUMN block_licensed INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE protection_settings ADD COLUMN commitment_delay_hours INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE protection_settings ADD COLUMN unlock_requested_at TEXT;
+
+      -- O modo Permissivo dependia de dados oficiais que o app não possui
+      UPDATE protection_settings SET block_mode = 'STRICT' WHERE block_mode = 'PERMISSIVE';
+
+      -- Exceções passam a valer só em domain_exceptions: block_status volta a refletir a classificação
+      UPDATE blocked_domains SET block_status = 'BLOCK'
+      WHERE block_status = 'ALLOW' AND classification_status IN ('UNAUTHORIZED_CONFIRMED', 'USER_ADDED');
+
+      -- A lista embutida é uma curadoria própria, não uma publicação oficial
+      UPDATE domain_sources
+      SET name = 'Curadoria BetsBlocker',
+          description = 'Lista mantida pelo projeto a partir de pesquisa pública; não é uma publicação oficial'
+      WHERE id = 2;
+      UPDATE blocked_domains SET source_id = 2 WHERE source_id = 1;
+
+      -- Redundantes: as colunas UNIQUE já têm índice próprio
+      DROP INDEX IF EXISTS idx_blocked_domains_domain;
+      DROP INDEX IF EXISTS idx_domain_exceptions_domain;
+    `);
+  },
+};
+
+export const migrations: Migration[] = [migration001, migration002, migration003];

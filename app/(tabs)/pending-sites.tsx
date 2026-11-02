@@ -10,7 +10,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { Clock, Check, X, Pause, AlertCircle, FileText } from 'lucide-react-native';
+import { Clock, Check, X, Pause, AlertCircle } from 'lucide-react-native';
 import { palette } from '@/theme/colors';
 import { Card } from '@/components/Card';
 import { Badge } from '@/components/Badge';
@@ -19,8 +19,7 @@ import { useDomainsStore } from '@/features/domains/domains.store';
 import { BlockedDomain, ReviewStatus } from '@/types';
 
 export default function PendingSitesScreen() {
-  const { pendingDomains, totalPending, isLoading, loadPendingDomains, reviewDomain } =
-    useDomainsStore();
+  const { pendingDomains, isLoading, loadPendingDomains, reviewDomain } = useDomainsStore();
 
   const [selectedDomain, setSelectedDomain] = useState<BlockedDomain | null>(null);
   const [reviewAction, setReviewAction] = useState<ReviewStatus | null>(null);
@@ -29,7 +28,7 @@ export default function PendingSitesScreen() {
 
   useEffect(() => {
     loadPendingDomains();
-  }, []);
+  }, [loadPendingDomains]);
 
   const openReviewModal = (domain: BlockedDomain, status: ReviewStatus) => {
     setSelectedDomain(domain);
@@ -55,7 +54,7 @@ export default function PendingSitesScreen() {
       setReviewAction(null);
       setReviewerNote('');
     } else {
-      Alert.alert('Erro', 'Não foi possível registrar a revisão.');
+      Alert.alert('Erro', useDomainsStore.getState().error || 'Não foi possível registrar a revisão.');
     }
   };
 
@@ -108,7 +107,7 @@ export default function PendingSitesScreen() {
       <View style={styles.infoBanner}>
         <AlertCircle size={18} color={palette.teal} />
         <Text style={styles.infoBannerText}>
-          Domínios nesta fila aguardam confirmação de evidência oficial. Nenhum domínio desconhecido é bloqueado sem prova.
+          Domínios nesta fila aguardam sua análise e só passam a ser bloqueados depois de confirmados.
         </Text>
       </View>
 
@@ -141,7 +140,7 @@ export default function PendingSitesScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Revisão Regulatória</Text>
+              <Text style={styles.modalTitle}>Revisão do Domínio</Text>
               <TouchableOpacity
                 onPress={() => {
                   setSelectedDomain(null);
@@ -159,9 +158,9 @@ export default function PendingSitesScreen() {
                 Ação selecionada:{' '}
                 <Text style={styles.decisionBold}>
                   {reviewAction === 'APPROVED'
-                    ? 'Bloquear (Não Autorizado Confirmado)'
+                    ? 'Bloquear este domínio'
                     : reviewAction === 'REJECTED'
-                    ? 'Liberar (Identificado como Autorizado)'
+                    ? 'Liberar este domínio'
                     : 'Suspender (Manter em análise adicional)'}
                 </Text>
               </Text>

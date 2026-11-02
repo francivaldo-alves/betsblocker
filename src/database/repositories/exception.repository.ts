@@ -19,19 +19,6 @@ export class ExceptionRepository {
     return result ?? null;
   }
 
-  async isDomainExcepted(domain: string): Promise<boolean> {
-    const db = await getDatabase();
-    const normalized = domain.toLowerCase().trim();
-    const nowIso = new Date().toISOString();
-    const result = await db.getFirstAsync<{ id: number }>(
-      `SELECT id FROM domain_exceptions 
-       WHERE domain = ? AND (expires_at IS NULL OR expires_at > ?) 
-       LIMIT 1;`,
-      [normalized, nowIso]
-    );
-    return result !== null;
-  }
-
   async addException(
     domain: string,
     reason: string,

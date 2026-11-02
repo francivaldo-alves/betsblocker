@@ -24,6 +24,11 @@ interface DomainsState {
   reviewDomain: (id: number, status: ReviewStatus, note: string) => Promise<boolean>;
 }
 
+const SEARCH_DEBOUNCE_MS = 250;
+
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
+let latestBlockedRequest = 0;
+
 export const useDomainsStore = create<DomainsState>((set, get) => ({
   blockedDomains: [],
   pendingDomains: [],
@@ -35,6 +40,7 @@ export const useDomainsStore = create<DomainsState>((set, get) => ({
   error: null,
 
   loadBlockedDomains: async () => {
+    const requestId = ++latestBlockedRequest;
     set({ isLoading: true, error: null });
     try {
       const { searchQuery, categoryFilter } = get();
@@ -46,6 +52,8 @@ export const useDomainsStore = create<DomainsState>((set, get) => ({
         }),
         domainService.countBlockedDomains(searchQuery, categoryFilter || undefined),
       ]);
+      // Uma busca mais antiga não pode sobrescrever o resultado da mais recente
+      if (requestId !== latestBlockedRequest) return;
       set({ blockedDomains: list, totalBlocked: count, isLoading: false });
     } catch (err: any) {
       set({ error: err?.message || 'Erro ao carregar lista de bloqueios.', isLoading: false });
@@ -57,9 +65,9 @@ export const useDomainsStore = create<DomainsState>((set, get) => ({
     try {
       const [list, count] = await Promise.all([
         domainService.listPendingDomains(100),
-        domainService.countBlockedDomains(undefined, undefined),
+        domainService.countPendingDomains(),
       ]);
-      set({ pendingDomains: list, totalPending: list.length, isLoading: false });
+      set({ pendingDomains: list, totalPending: count, isLoading: false });
     } catch (err: any) {
       set({ error: err?.message || 'Erro ao carregar pendências.', isLoading: false });
     }
@@ -67,7 +75,8 @@ export const useDomainsStore = create<DomainsState>((set, get) => ({
 
   setSearchQuery: (query: string) => {
     set({ searchQuery: query });
-    get().loadBlockedDomains();
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => get().loadBlockedDomains(), SEARCH_DEBOUNCE_MS);
   },
 
   setCategoryFilter: (category: string) => {

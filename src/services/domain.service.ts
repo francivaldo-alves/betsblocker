@@ -2,18 +2,13 @@ import { validateAndNormalizeDomain } from '@/utils/domain-validator';
 import {
   domainRepository,
   exceptionRepository,
-  sourceRepository,
-  reviewRepository,
+  settingsRepository,
   DomainListFilter,
 } from '@/database';
-import { BlockedDomain, DomainException, DomainReview, DomainSource } from '@/types';
+import { BlockedDomain, DomainException } from '@/types';
+import { assertUnlocked } from './commitment.service';
 
-export interface DomainDetailView {
-  domain: BlockedDomain;
-  source: DomainSource | null;
-  reviews: DomainReview[];
-  exception: DomainException | null;
-}
+const USER_MANUAL_SOURCE_ID = 3;
 
 export class DomainService {
   /**
@@ -34,6 +29,9 @@ export class DomainService {
 
     const nowIso = new Date().toISOString();
 
+    // Pedir o bloqueio cancela uma liberação anterior do mesmo domínio
+    await exceptionRepository.removeException(domain);
+
     if (existing) {
       // Se já existe e estava com status ALLOW ou PENDING, atualiza para USER_ADDED
       await domainRepository.updateClassification(
@@ -51,7 +49,7 @@ export class DomainService {
       category,
       classification_status: 'USER_ADDED',
       block_status: 'BLOCK',
-      source_id: 3, // Inclusão Manual do Usuário
+      source_id: USER_MANUAL_SOURCE_ID,
       evidence: `Inclusão manual: ${evidence}`,
       verified_at: nowIso,
     });
@@ -68,78 +66,27 @@ export class DomainService {
     reason: string,
     expiresAt?: string | null
   ): Promise<DomainException> {
+    assertUnlocked(await settingsRepository.getSettings());
+
     const validation = validateAndNormalizeDomain(rawDomain);
     if (!validation.isValid || !validation.normalized) {
       throw new Error(validation.error || 'Domínio inválido.');
     }
 
     const domain = validation.normalized;
-
-    // Registra na tabela de exceções
     await exceptionRepository.addException(domain, reason, expiresAt);
-
-    // Se estiver cadastrado na tabela de domínios, altera a decisão de bloqueio para ALLOW
-    const existing = await domainRepository.findByDomain(domain);
-    if (existing) {
-      await domainRepository.updateClassification(
-        existing.id,
-        existing.classification_status,
-        'ALLOW',
-        `Exceção aplicada: ${reason}`
-      );
-    }
 
     const exception = await exceptionRepository.findByDomain(domain);
     return exception!;
   }
 
   /**
-   * Remove uma exceção manual e restaura o bloqueio se o domínio estiver classificado para bloqueio
+   * Remove uma exceção manual: o domínio volta a seguir a própria classificação
    */
   async removeException(rawDomain: string): Promise<boolean> {
     const validation = validateAndNormalizeDomain(rawDomain);
     const domain = validation.normalized || rawDomain.toLowerCase().trim();
-
-    const removed = await exceptionRepository.removeException(domain);
-
-    // Restaura o block_status conforme o status regulatório
-    const existing = await domainRepository.findByDomain(domain);
-    if (existing) {
-      const shouldBlock =
-        existing.classification_status === 'UNAUTHORIZED_CONFIRMED' ||
-        existing.classification_status === 'USER_ADDED';
-
-      await domainRepository.updateClassification(
-        existing.id,
-        existing.classification_status,
-        shouldBlock ? 'BLOCK' : 'ALLOW'
-      );
-    }
-
-    return removed;
-  }
-
-  /**
-   * Obtém os detalhes completos de um domínio com fonte e revisões
-   */
-  async getDomainDetails(domainId: number): Promise<DomainDetailView | null> {
-    const domain = await domainRepository.findById(domainId);
-    if (!domain) {
-      return null;
-    }
-
-    const [source, reviews, exception] = await Promise.all([
-      sourceRepository.findById(domain.source_id),
-      reviewRepository.listByDomainId(domain.id),
-      exceptionRepository.findByDomain(domain.domain),
-    ]);
-
-    return {
-      domain,
-      source,
-      reviews,
-      exception,
-    };
+    return exceptionRepository.removeException(domain);
   }
 
   /**
@@ -163,11 +110,16 @@ export class DomainService {
     return domainRepository.listPending(limit, offset);
   }
 
+  async countPendingDomains() {
+    return domainRepository.countPending();
+  }
+
   /**
    * Retorna os domínios que devem ser efetivamente bloqueados no motor de rede
    */
   async getActiveBlocklist(): Promise<string[]> {
-    return domainRepository.getActiveBlockedDomains();
+    const settings = await settingsRepository.getSettings();
+    return domainRepository.getActiveBlockedDomains(settings.block_licensed === 1);
   }
 }
 

@@ -39,7 +39,7 @@ export function ClassificationBadge({ status }: { status: ClassificationStatus }
     case 'AUTHORIZED':
       return <Badge label="Autorizado" variant="success" />;
     case 'UNAUTHORIZED_CONFIRMED':
-      return <Badge label="Não Autorizado" variant="danger" />;
+      return <Badge label="Na Lista de Bloqueio" variant="danger" />;
     case 'PENDING_REVIEW':
       return <Badge label="Em Análise" variant="warning" />;
     case 'USER_ADDED':

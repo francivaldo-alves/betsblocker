@@ -10,20 +10,24 @@ export const ALLOWED_WILDCARD_TLDS = new Set(['bet', 'casino', 'poker', 'slot', 
 const GENERIC_SECOND_LEVELS = new Set(['com', 'net', 'org', 'gov', 'edu', 'co']);
 
 // Domínios de infraestrutura crítica governamental e de rede que NUNCA devem ser bloqueados
+// Mantida igual a PROTECTED_DOMAINS em DomainRules.kt (um teste compara as duas)
 export const PROTECTED_SYSTEM_DOMAINS = new Set([
-  'gov.br',
-  'fazenda.gov.br',
-  'receita.fazenda.gov.br',
-  'anatel.gov.br',
-  'planalto.gov.br',
-  'stf.jus.br',
-  'google.com',
   'apple.com',
-  'microsoft.com',
   'cloudflare.com',
   'dns.google',
-  'one.one.one.one',
+  'g1.com.br',
+  'globo.com',
+  'google.com',
+  'google.com.br',
+  'googleapis.com',
+  'gov.br',
+  'gstatic.com',
   'localhost',
+  'microsoft.com',
+  'one.one.one.one',
+  'stf.jus.br',
+  'whatsapp.com',
+  'whatsapp.net',
 ]);
 
 const IPV4_REGEX =

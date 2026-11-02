@@ -1,0 +1,5 @@
+# A busca binária nativa lê ads-trackers.txt por bytes, e o checksum da lista depende do conteúdo exato
+* text=auto eol=lf
+*.png binary
+*.jar binary
+*.bat text eol=crlf

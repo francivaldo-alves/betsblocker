@@ -33,6 +33,12 @@ yarn-error.*
 # local env files
 .env*.local
 
+# Chave que assina a lista de bloqueio
+blocklist-private*
+
+# testes
+coverage/
+
 # typescript
 *.tsbuildinfo
 

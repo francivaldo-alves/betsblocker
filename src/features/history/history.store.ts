@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { syncRepository, eventRepository } from '@/database';
+import { protectionService } from '@/services/protection.service';
 import { SyncHistory, BlockEvent } from '@/types';
 
 interface HistoryState {
@@ -9,10 +10,9 @@ interface HistoryState {
   isLoading: boolean;
   loadSyncHistory: () => Promise<void>;
   loadBlockEvents: () => Promise<void>;
-  recordBlockEvent: (domain: string, reason: string) => Promise<void>;
 }
 
-export const useHistoryStore = create<HistoryState>((set, get) => ({
+export const useHistoryStore = create<HistoryState>((set) => ({
   syncHistory: [],
   blockEvents: [],
   todayBlockedCount: 0,
@@ -31,6 +31,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
   loadBlockEvents: async () => {
     set({ isLoading: true });
     try {
+      await protectionService.importBlockEvents();
       const [events, countToday] = await Promise.all([
         eventRepository.listRecent(50),
         eventRepository.countToday(),
@@ -39,10 +40,5 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
     } catch {
       set({ isLoading: false });
     }
-  },
-
-  recordBlockEvent: async (domain: string, reason: string) => {
-    await eventRepository.recordEvent(domain, reason);
-    await get().loadBlockEvents();
   },
 }));

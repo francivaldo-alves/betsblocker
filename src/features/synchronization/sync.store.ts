@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { blocklistSyncService, SyncResult } from '@/services/blocklist-sync.service';
+import { blocklistSyncService, failedSync, SyncResult } from '@/services/blocklist-sync.service';
 import { protectionService } from '@/services/protection.service';
 import { SyncHistory } from '@/types';
 
@@ -7,18 +7,14 @@ interface SyncState {
   isSyncing: boolean;
   lastSync: SyncHistory | null;
   syncError: string | null;
-  lastResult: SyncResult | null;
   loadLastSync: () => Promise<void>;
-  syncInitialList: () => Promise<SyncResult>;
-  syncCustomData: (manifest: unknown, listJsonString: string) => Promise<SyncResult>;
-  clearError: () => void;
+  syncNow: () => Promise<SyncResult>;
 }
 
 export const useSyncStore = create<SyncState>((set) => ({
   isSyncing: false,
   lastSync: null,
   syncError: null,
-  lastResult: null,
 
   loadLastSync: async () => {
     try {
@@ -29,10 +25,15 @@ export const useSyncStore = create<SyncState>((set) => ({
     }
   },
 
-  syncInitialList: async () => {
+  syncNow: async () => {
     set({ isSyncing: true, syncError: null });
     try {
-      const result = await blocklistSyncService.syncInitialBlocklist();
+      const bundled = await blocklistSyncService.ensureBundledList();
+      const result =
+        bundled.success && blocklistSyncService.getRemoteConfig()
+          ? await blocklistSyncService.syncRemote()
+          : bundled;
+
       if (result.success) {
         // Sem isso, a VPN ativa continuaria filtrando com as regras anteriores
         await protectionService.updateBlocklist();
@@ -40,76 +41,14 @@ export const useSyncStore = create<SyncState>((set) => ({
       const lastHistory = await blocklistSyncService.getLastSyncInfo();
       set({
         isSyncing: false,
-        lastResult: result,
         lastSync: lastHistory,
         syncError: result.success ? null : result.error || 'Falha na sincronização.',
       });
       return result;
     } catch (err: any) {
       const message = err?.message || 'Falha inesperada na sincronização.';
-      set({
-        isSyncing: false,
-        syncError: message,
-        lastResult: {
-          success: false,
-          version: 0,
-          totalRecords: 0,
-          addedRecords: 0,
-          updatedRecords: 0,
-          removedRecords: 0,
-          error: message,
-        },
-      });
-      return {
-        success: false,
-        version: 0,
-        totalRecords: 0,
-        addedRecords: 0,
-        updatedRecords: 0,
-        removedRecords: 0,
-        error: message,
-      };
+      set({ isSyncing: false, syncError: message });
+      return failedSync(message);
     }
   },
-
-  syncCustomData: async (manifest: unknown, listJsonString: string) => {
-    set({ isSyncing: true, syncError: null });
-    try {
-      const result = await blocklistSyncService.sync(manifest, listJsonString);
-      const lastHistory = await blocklistSyncService.getLastSyncInfo();
-      set({
-        isSyncing: false,
-        lastResult: result,
-        lastSync: lastHistory,
-        syncError: result.success ? null : result.error || 'Falha na sincronização.',
-      });
-      return result;
-    } catch (err: any) {
-      const message = err?.message || 'Falha ao sincronizar dados fornecidos.';
-      set({
-        isSyncing: false,
-        syncError: message,
-        lastResult: {
-          success: false,
-          version: 0,
-          totalRecords: 0,
-          addedRecords: 0,
-          updatedRecords: 0,
-          removedRecords: 0,
-          error: message,
-        },
-      });
-      return {
-        success: false,
-        version: 0,
-        totalRecords: 0,
-        addedRecords: 0,
-        updatedRecords: 0,
-        removedRecords: 0,
-        error: message,
-      };
-    }
-  },
-
-  clearError: () => set({ syncError: null }),
 }));

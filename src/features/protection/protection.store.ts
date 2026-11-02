@@ -1,16 +1,20 @@
 import { create } from 'zustand';
 import { settingsRepository } from '@/database';
 import { protectionService } from '@/services/protection.service';
+import {
+  assertUnlocked,
+  weakensProtection,
+} from '@/services/commitment.service';
 import { ProtectionSettings, ProtectionOperationalStatus } from '@/types';
 
 interface ProtectionState {
   settings: ProtectionSettings;
   operationalStatus: ProtectionOperationalStatus;
-  isLoading: boolean;
   loadSettings: () => Promise<void>;
   toggleProtection: () => Promise<{ success: boolean; active: boolean; message?: string }>;
   updateSettings: (patch: Partial<Omit<ProtectionSettings, 'id'>>) => Promise<void>;
-  setOperationalStatus: (status: ProtectionOperationalStatus) => void;
+  requestUnlock: () => Promise<void>;
+  cancelUnlock: () => Promise<void>;
 }
 
 export const useProtectionStore = create<ProtectionState>((set, get) => ({
@@ -20,11 +24,12 @@ export const useProtectionStore = create<ProtectionState>((set, get) => ({
     notification_enabled: 1,
     automatic_sync: 1,
     block_ads: 0,
+    block_licensed: 1,
     block_mode: 'STRICT',
-    theme: 'system',
+    commitment_delay_hours: 0,
+    unlock_requested_at: null,
   },
   operationalStatus: 'STOPPED',
-  isLoading: false,
 
   loadSettings: async () => {
     try {
@@ -40,43 +45,48 @@ export const useProtectionStore = create<ProtectionState>((set, get) => ({
   },
 
   toggleProtection: async () => {
-    const current = get().settings;
-    const shouldEnable = current.protection_enabled === 0;
+    // Decide pelo estado real: depois de uma queda, o botão religa em vez de desligar
+    const shouldEnable = (await protectionService.getStatus()) !== 'RUNNING';
 
-    if (shouldEnable) {
-      try {
+    try {
+      if (shouldEnable) {
         await protectionService.startProtection();
-        const updated = await settingsRepository.getSettings();
-        set({ settings: updated, operationalStatus: 'RUNNING' });
-        return { success: true, active: true };
-      } catch (err: any) {
-        // Honestidade operacional: não simula proteção
-        const updated = await settingsRepository.getSettings();
-        set({ settings: updated, operationalStatus: 'STOPPED' });
-        return {
-          success: false,
-          active: false,
-          message:
-            err?.message ||
-            'Não foi possível iniciar a proteção nativa. Certifique-se de executar em um Expo Development Build.',
-        };
+      } else {
+        await protectionService.stopProtection();
       }
-    } else {
-      await protectionService.stopProtection();
-      const updated = await settingsRepository.getSettings();
-      set({ settings: updated, operationalStatus: 'STOPPED' });
-      return { success: true, active: false };
+      return { success: true, active: shouldEnable };
+    } catch (err: any) {
+      // Honestidade operacional: não simula proteção
+      return {
+        success: false,
+        active: !shouldEnable,
+        message: err?.message || 'Não foi possível alterar a proteção.',
+      };
+    } finally {
+      await get().loadSettings();
     }
   },
 
   updateSettings: async (patch) => {
+    const current = await settingsRepository.getSettings();
+    if (weakensProtection(current, patch)) {
+      assertUnlocked(current);
+    }
+
     const updated = await settingsRepository.updateSettings(patch);
     set({ settings: updated });
-    // Atualiza regras se o modo de bloqueio ou o filtro de anúncios foi modificado
-    if (patch.block_mode || patch.block_ads !== undefined) {
-      await protectionService.updateBlocklist();
-    }
+    await protectionService.updateBlocklist();
   },
 
-  setOperationalStatus: (status) => set({ operationalStatus: status }),
+  requestUnlock: async () => {
+    const updated = await settingsRepository.updateSettings({
+      unlock_requested_at: new Date().toISOString(),
+    });
+    set({ settings: updated });
+  },
+
+  cancelUnlock: async () => {
+    const updated = await settingsRepository.updateSettings({ unlock_requested_at: null });
+    set({ settings: updated });
+  },
 }));

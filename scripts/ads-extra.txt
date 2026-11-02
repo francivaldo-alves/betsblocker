@@ -1,0 +1,20 @@
+# Domínios adicionais de anúncios e telemetria, incluídos por update-ads-list.mjs
+freshmarketer.com
+api.bugsnag.com
+app.getsentry.com
+events.reddit.com
+business-api.tiktok.com
+log.byteoversea.com
+udcm.yahoo.com
+log.fc.yahoo.com
+appmetrica.yandex.ru
+metrika.yandex.ru
+api-adservices.apple.com
+books-analytics-events.apple.com
+data.mistat.india.xiaomi.com
+data.mistat.rus.xiaomi.com
+metrics.data.hicloud.com
+metrics2.data.hicloud.com
+logservice.hicloud.com
+logbak.hicloud.com
+analytics-api.samsunghealthcn.com
