@@ -88,12 +88,12 @@ class BetsBlockerVpnService : VpnService() {
       val builder = Builder().apply {
         setSession("BetsBlocker")
         setMtu(1500)
-        // Endereço local da interface virtual
-        addAddress("10.111.222.1", 32)
-        // Define o DNS do sistema para apontar para nossa interface local
-        addDnsServer("10.111.222.1")
-        // Roteia exclusivamente as consultas DNS para nossa interface
-        addRoute("10.111.222.1", 32)
+        // Endereço local da interface virtual (Cliente no subnet /24)
+        addAddress("10.111.222.1", 24)
+        // Define o DNS do sistema para o gateway virtual dedicado no mesmo subnet
+        addDnsServer("10.111.222.2")
+        // Roteia exclusivamente as consultas DNS direcionadas a 10.111.222.2 para a TUN
+        addRoute("10.111.222.2", 32)
         try {
           addDisallowedApplication(packageName)
         } catch (_: Exception) {}
